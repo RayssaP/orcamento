@@ -950,6 +950,18 @@ atualizarRelatorios();
 }
 }
 
+
+function parseDataLocal(dataStr) {
+if (!dataStr || typeof dataStr !== 'string') return null;
+const partes = dataStr.split('-');
+if (partes.length !== 3) return null;
+const ano = parseInt(partes[0], 10);
+const mes = parseInt(partes[1], 10) - 1;
+const dia = parseInt(partes[2], 10);
+if (isNaN(ano) || isNaN(mes) || isNaN(dia)) return null;
+return new Date(ano, mes, dia, 12, 0, 0, 0);
+}
+
 function fmt(v) {
 return 'R$ ' + v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
@@ -963,7 +975,7 @@ return;
 const alertas = contas.filter(c => {
 if (!c.dataVencimento) return false;
 const hoje = new Date();
-const vencimento = new Date(c.dataVencimento);
+const vencimento = parseDataLocal(c.dataVencimento);
 const diasRestantes = Math.ceil((vencimento - hoje) / (1000 * 60 * 60 * 24));
 return diasRestantes <= 7 && diasRestantes > 0;
 });
@@ -974,7 +986,7 @@ if (alertas.length > 0) {
 html += '<div style="background: #fef3c7; border: 2px solid #fbbf24; border-radius: 8px; padding: 12px; margin-bottom: 12px;">';
 html += '<div style="font-weight: bold; color: #92400e; margin-bottom: 8px;">⚠️ Alertas de Vencimento</div>';
 alertas.forEach(c => {
-const vencimento = new Date(c.dataVencimento);
+const vencimento = parseDataLocal(c.dataVencimento);
 const hoje = new Date();
 const diasRestantes = Math.ceil((vencimento - hoje) / (1000 * 60 * 60 * 24));
 const cat = categorias[c.cat] || categoriasDefault[c.cat];
@@ -1350,7 +1362,7 @@ const alertas = { vencidas: [], proximas: [], outras: [] };
 
 nãoPagas.forEach(c => {
 if (c.dataVencimento) {
-const vencimento = new Date(c.dataVencimento);
+const vencimento = parseDataLocal(c.dataVencimento);
 vencimento.setHours(0, 0, 0, 0);
 const diasRestantes = Math.ceil((vencimento - hoje) / (1000 * 60 * 60 * 24));
 
@@ -1389,7 +1401,7 @@ html += '<div style="background: #fef3c7; border: 2px solid var(--warning); bord
 html += '<div style="font-weight: bold; color: #92400e; margin-bottom: 8px;">🟡 PRÓXIMAS AO VENCIMENTO</div>';
 alertas.proximas.forEach(c => {
 const cat = categorias[c.cat] || categoriasDefault[c.cat];
-const vencimento = new Date(c.dataVencimento);
+const vencimento = parseDataLocal(c.dataVencimento);
 html += `<div class="item" style="background: white; margin-bottom: 8px;">
 <div class="item-info">
 <div class="item-desc">${c.desc}</div>
@@ -1439,7 +1451,7 @@ function renderCalendario() {
 const m = parseInt(document.getElementById('mes-calendario').value);
 const primeiroDia = new Date(2026, m, 1).getDay();
 const ultimoDia = new Date(2026, m + 1, 0).getDate();
-const contas = dados[m] || [];
+const contas = Object.values(dados).flat().filter(Boolean);
 
 let html = '';
 
@@ -1448,23 +1460,24 @@ html += `<div class="calendar-day" style="background: transparent; border: none;
 }
 
 for (let d = 1; d <= ultimoDia; d++) {
-const contasDodia = contas.filter(c => {
+const contasDoDia = contas.filter(c => {
 if (!c.dataVencimento) return false;
-const dataVenc = new Date(c.dataVencimento);
-return dataVenc.getDate() === d;
+const dataVenc = parseDataLocal(c.dataVencimento);
+return dataVenc && dataVenc.getFullYear() === 2026 && dataVenc.getMonth() === m && dataVenc.getDate() === d;
 });
 
 let itemsHtml = '';
-contasDodia.slice(0, 3).forEach(c => {
-itemsHtml += `<div class="calendar-item ${c.tipo}">${c.desc.slice(0, 10)}</div>`;
+contasDoDia.slice(0, 3).forEach(c => {
+const titulo = `${c.desc} • ${fmt(c.valor)}${c.pago ? ' • Pago' : ' • Pendente'}`;
+itemsHtml += `<div class="calendar-item ${c.tipo}${c.recorrente ? ' recurring' : ''}" title="${titulo}">${c.desc.slice(0, 12)}</div>`;
 });
 
-if (contasDodia.length > 3) {
-itemsHtml += `<div style="font-size: 8px; color: #666; padding: 1px; text-align: center;">+${contasDodia.length - 3}</div>`;
+if (contasDoDia.length > 3) {
+itemsHtml += `<div style="font-size: 8px; color: #666; padding: 1px; text-align: center;">+${contasDoDia.length - 3}</div>`;
 }
 
 html += `
-<div class="calendar-day">
+<div class="calendar-day" onclick="abrirContasDoDia(${m}, ${d})">
 <div class="calendar-day-num">${d}</div>
 <div class="calendar-day-items">${itemsHtml}</div>
 </div>
@@ -1472,6 +1485,23 @@ html += `
 }
 
 document.getElementById('calendario-grid').innerHTML = html;
+}
+
+function abrirContasDoDia(mes, dia) {
+const contas = Object.values(dados).flat().filter(c => {
+if (!c.dataVencimento) return false;
+const dataVenc = parseDataLocal(c.dataVencimento);
+return dataVenc && dataVenc.getFullYear() === 2026 && dataVenc.getMonth() === mes && dataVenc.getDate() === dia;
+});
+
+if (!contas.length) return;
+
+let mensagem = `Contas do dia ${String(dia).padStart(2, '0')}/${String(mes + 1).padStart(2, '0')}/2026:
+
+`;
+mensagem += contas.map(c => `• ${c.desc} — ${fmt(c.valor)}${c.pago ? ' (Pago)' : ' (Pendente)'}`).join('
+');
+alert(mensagem);
 }
 
 function atualizarRelatorios() {
