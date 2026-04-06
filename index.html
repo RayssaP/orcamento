@@ -1499,8 +1499,7 @@ if (!contas.length) return;
 let mensagem = `Contas do dia ${String(dia).padStart(2, '0')}/${String(mes + 1).padStart(2, '0')}/2026:
 
 `;
-mensagem += contas.map(c => `• ${c.desc} — ${fmt(c.valor)}${c.pago ? ' (Pago)' : ' (Pendente)'}`).join('
-');
+mensagem += contas.map(c => `• ${c.desc} — ${fmt(c.valor)}${c.pago ? ' (Pago)' : ' (Pendente)'}`).join('\n');
 alert(mensagem);
 }
 
