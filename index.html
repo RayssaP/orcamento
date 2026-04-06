@@ -1007,7 +1007,7 @@ return;
 }
 
 const alertas = contas.filter(c => {
-if (!c.dataVencimento) return false;
+if (!c.dataVencimento || c.pago) return false;
 const hoje = new Date();
 const vencimento = parseDataLocal(c.dataVencimento);
 const diasRestantes = Math.ceil((vencimento - hoje) / (1000 * 60 * 60 * 24));
