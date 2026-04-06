@@ -100,6 +100,42 @@ input, select, textarea {
   transition: all 0.2s;
 }
 
+input[type="checkbox"], input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 auto;
+  accent-color: var(--secondary);
+}
+
+.option-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.option-check span {
+  flex: 1;
+}
+
+.form-subsection {
+  background: #f9fafb;
+  border: 1px solid var(--border);
+  padding: 12px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+body.dark-mode .form-subsection {
+  background: #111827;
+  border-color: #374151;
+}
+
 input:focus, select:focus, textarea:focus { border-color: var(--secondary); outline: none; box-shadow: 0 0 0 3px rgba(42, 82, 152, 0.1); }
 
 .summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
@@ -673,16 +709,21 @@ body.dark-mode .drive-status { background: #1e3a5f; border-color: #2563eb; color
 <label>Categoria</label>
 <div class="category-select" id="cat-select" style="margin-bottom: 16px;"></div>
 
-<label>
-<input type="checkbox" id="pago-conta"> ✓ Já foi pago?
+<label class="option-check">
+<input type="checkbox" id="pago-conta">
+<span>✓ Já foi pago?</span>
 </label>
+
+<label>Data de Vencimento</label>
+<input type="date" id="data-vencimento">
 
 <!-- NOVA FEATURE: CONTAS RECORRENTES -->
-<label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-<input type="checkbox" id="recorrente-conta" onchange="toggleRecorrente()"> 🔁 Conta Recorrente?
+<label class="option-check">
+<input type="checkbox" id="recorrente-conta" onchange="toggleRecorrente()">
+<span>🔁 Conta Recorrente?</span>
 </label>
 
-<div id="campos-recorrente" style="display: none; background: #fef3c7; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+<div id="campos-recorrente" class="form-subsection" style="display: none; background: #fef3c7;">
 <label>Tipo de Recorrência*</label>
 <select id="tipo-recorrencia" required>
 <option value="diaria">📍 Diária</option>
@@ -697,28 +738,28 @@ body.dark-mode .drive-status { background: #1e3a5f; border-color: #2563eb; color
 <label>Data de Término (opcional - deixe em branco para sem fim)</label>
 <input type="date" id="data-fim-recorrencia">
 
-<label>
-<input type="checkbox" id="notificar-recorrencia"> 🔔 Notificar antes de processar?
+<label class="option-check" style="margin-bottom: 0;">
+<input type="checkbox" id="notificar-recorrencia">
+<span>🔔 Notificar antes de processar?</span>
 </label>
 </div>
 
-<label onclick="toggleAlertas()" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-<input type="checkbox" id="alertas-conta"> 🚨 Ativar Alertas de Vencimento?
+<label class="option-check">
+<input type="checkbox" id="alertas-conta" onchange="toggleAlertas()">
+<span>🚨 Ativar alertas de vencimento?</span>
 </label>
 
-<div id="campos-alerta" style="display: none;">
-<label>Data de Vencimento*</label>
-<input type="date" id="data-vencimento" required>
-
-<label>Dia do Mês para Lembrete (opcional)</label>
-<input type="number" id="dia-lembrete" min="1" max="31" placeholder="Ex: 10 (para 10 dias antes)">
+<div id="campos-alerta" class="form-subsection" style="display: none;">
+<label>Antecedência do lembrete (em dias)</label>
+<input type="number" id="dia-lembrete" min="1" max="31" placeholder="Ex: 3">
 </div>
 
-<label onclick="toggleParcelamento()" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-<input type="checkbox" id="parcelada-conta"> 📦 Conta parcelada?
+<label class="option-check">
+<input type="checkbox" id="parcelada-conta" onchange="toggleParcelamento()">
+<span>📦 Conta parcelada?</span>
 </label>
 
-<div id="campos-parcelamento" style="display: none;">
+<div id="campos-parcelamento" class="form-subsection" style="display: none;">
 <label>Total de Parcelas</label>
 <input type="number" id="total-parcelas" value="1" min="1" max="60">
 
@@ -1036,7 +1077,7 @@ document.getElementById('desc-conta').value = conta.desc.split(' (')[0];
 document.getElementById('valor-conta').value = conta.valor;
 document.getElementById('tipo-conta').value = conta.tipo;
 document.getElementById('pago-conta').checked = conta.pago;
-document.getElementById('alertas-conta').checked = !!conta.dataVencimento;
+document.getElementById('alertas-conta').checked = !!conta.alertasAtivos;
 document.getElementById('data-vencimento').value = conta.dataVencimento || '';
 document.getElementById('dia-lembrete').value = conta.diaLembrete || '';
 document.getElementById('parcelada-conta').checked = conta.parcelada || false;
@@ -1048,7 +1089,7 @@ document.getElementById('data-inicio-recorrencia').value = conta.dataInicioRecor
 document.getElementById('data-fim-recorrencia').value = conta.dataFimRecorrencia || '';
 document.getElementById('notificar-recorrencia').checked = conta.notificarRecorrencia || false;
 
-if (conta.dataVencimento) document.getElementById('campos-alerta').style.display = 'block';
+if (conta.alertasAtivos) document.getElementById('campos-alerta').style.display = 'block';
 if (conta.parcelada) document.getElementById('campos-parcelamento').style.display = 'block';
 if (conta.recorrente) document.getElementById('campos-recorrente').style.display = 'block';
 
@@ -1099,7 +1140,7 @@ const parcelaInicial = isParcelada ? parseInt(document.getElementById('parcela-a
 const descOriginal = document.getElementById('desc-conta').value;
 const valorTotal = parseFloat(document.getElementById('valor-conta').value);
 const valorParcela = isParcelada ? valorTotal / totalParcelas : valorTotal;
-const dataVencimento = temAlerta ? document.getElementById('data-vencimento').value : '';
+const dataVencimento = document.getElementById('data-vencimento').value || '';
 const diaLembrete = temAlerta ? document.getElementById('dia-lembrete').value : '';
 
 const contaBase = {
@@ -1110,6 +1151,7 @@ cat: document.querySelector('.cat-option.selected')?.dataset.cat || 'outros',
 pago: document.getElementById('pago-conta').checked,
 dataVencimento: dataVencimento,
 diaLembrete: diaLembrete,
+alertasAtivos: temAlerta,
 parcelada: isParcelada,
 totalParcelas: totalParcelas,
 parcelaNum: parcelaInicial,
@@ -1641,6 +1683,9 @@ let driveTokenClient = null;
 let driveAccessToken = null;
 let driveFileId      = null;
 let driveConectado   = false;
+let driveInitEmAndamento = false;
+let driveInitConcluido   = false;
+let driveInitTentativas  = 0;
 
 // --- UI helpers ---
 function driveSetStatus(texto, tipo) {
@@ -1676,41 +1721,85 @@ function driveSetLastSync(ts) {
 }
 
 // --- Inicialização ---
+function driveBibliotecasProntas() {
+  return (
+    typeof gapi !== 'undefined' &&
+    typeof google !== 'undefined' &&
+    !!google.accounts &&
+    !!google.accounts.oauth2
+  );
+}
+
 function driveInit() {
+  if (driveInitConcluido || driveInitEmAndamento) return;
+
   if (!DRIVE_CLIENT_ID || DRIVE_CLIENT_ID.includes('SEU_CLIENT_ID')) {
     document.getElementById('drive-config-aviso').style.display = 'block';
     driveSetStatus('Client ID ausente', 'err');
     return;
   }
-  gapi.load('client', async () => {
-    await gapi.client.init({ discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'] });
-    driveTokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: DRIVE_CLIENT_ID,
-      scope: DRIVE_SCOPES,
-      callback: driveHandleToken
-    });
-    // Tenta restaurar token salvo
-    const saved = localStorage.getItem('drive_token');
-    const email = localStorage.getItem('drive_email');
-    if (saved) {
-      try {
-        const t = JSON.parse(saved);
-        if (Date.now() < t.expiry) {
-          driveAccessToken = t.token;
-          gapi.client.setToken({ access_token: t.token });
-          driveConectado = true;
-          driveSetStatus('Drive conectado', 'ok');
-          driveSetButtons(true);
-          driveShowUser(email);
-          driveSetLastSync(localStorage.getItem('drive_last_sync'));
-          if (localStorage.getItem('drive_autosync') === 'true') {
-            await driveCarregar(false);
-          }
-          return;
-        }
-      } catch(e) {}
+
+  if (!driveBibliotecasProntas()) {
+    driveInitTentativas++;
+    driveSetStatus('Carregando bibliotecas Google…', 'sync');
+    if (driveInitTentativas <= 20) {
+      setTimeout(driveInit, 800);
+    } else {
+      driveSetStatus('Falha ao carregar Google API', 'err');
+      console.error('Bibliotecas Google não ficaram prontas a tempo.');
     }
-    driveSetStatus('Drive desconectado', '');
+    return;
+  }
+
+  driveInitEmAndamento = true;
+  driveSetStatus('Inicializando Google Drive…', 'sync');
+
+  gapi.load('client', async () => {
+    try {
+      await gapi.client.init({
+        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
+      });
+
+      driveTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: DRIVE_CLIENT_ID,
+        scope: DRIVE_SCOPES,
+        callback: driveHandleToken
+      });
+
+      driveInitConcluido = true;
+
+      // Tenta restaurar token salvo
+      const saved = localStorage.getItem('drive_token');
+      const email = localStorage.getItem('drive_email');
+      if (saved) {
+        try {
+          const t = JSON.parse(saved);
+          if (Date.now() < t.expiry) {
+            driveAccessToken = t.token;
+            gapi.client.setToken({ access_token: t.token });
+            driveConectado = true;
+            driveSetStatus('Drive conectado', 'ok');
+            driveSetButtons(true);
+            driveShowUser(email);
+            driveSetLastSync(localStorage.getItem('drive_last_sync'));
+            if (localStorage.getItem('drive_autosync') === 'true') {
+              await driveCarregar(false);
+            }
+            return;
+          }
+        } catch(e) {
+          console.error('Erro ao restaurar token salvo:', e);
+        }
+      }
+
+      driveSetStatus('Drive desconectado', '');
+    } catch (e) {
+      console.error('Erro ao inicializar Google Drive:', e);
+      driveSetStatus('Erro ao inicializar Google API', 'err');
+      alert('Erro ao inicializar Google API. Verifique o Client ID e a origem autorizada no Google Cloud.');
+    } finally {
+      driveInitEmAndamento = false;
+    }
   });
 }
 
@@ -1737,7 +1826,11 @@ async function driveHandleToken(resp) {
 }
 
 function driveLogin() {
-  if (!driveTokenClient) { alert('Google API ainda carregando. Aguarde.'); return; }
+  if (!driveInitConcluido || !driveTokenClient) {
+    driveInit();
+    alert('Google API ainda não terminou de carregar. Aguarde alguns segundos e tente novamente.');
+    return;
+  }
   driveTokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
@@ -1869,13 +1962,7 @@ function salvarLocal() {
 window.addEventListener('load', () => {
   init();
   aplicarTemaEscuro();
-  // Inicializa Drive sync após carregar Google APIs
-  if (typeof gapi !== 'undefined') {
-    driveInit();
-  } else {
-    // Retry após 2s caso o script ainda não tenha carregado
-    setTimeout(() => { if (typeof gapi !== 'undefined') driveInit(); }, 2000);
-  }
+  setTimeout(driveInit, 500);
 });
 
 </script>
