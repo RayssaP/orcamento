@@ -823,8 +823,12 @@ localStorage.setItem('orcamento_cats', JSON.stringify(categorias));
 processarRecorrentes();
 atualizarTodasAsPaginas();
 // Auto-sync com Google Drive se ativado
-if (localStorage.getItem('drive_autosync') === 'true' && driveConectado) {
-  driveSalvar(false);
+try {
+  if (localStorage.getItem('drive_autosync') === 'true' && typeof driveConectado !== 'undefined' && driveConectado) {
+    driveSalvar(false);
+  }
+} catch (err) {
+  console.warn('Falha no auto-sync do Drive:', err);
 }
 }
 
@@ -1137,66 +1141,78 @@ document.getElementById('campos-parcelamento').style.display = checked ? 'block'
 function salvarConta(e) {
 e.preventDefault();
 
-const contaId = document.getElementById('conta-id').value;
-const contaMesValue = document.getElementById('conta-mes').value;
-const contaMes = contaMesValue !== '' ? parseInt(contaMesValue) : mesAtual;
-const mesDestino = !isNaN(contaMes) ? contaMes : mesAtual;
+try {
+  const contaId = document.getElementById('conta-id').value;
+  const contaMesValue = document.getElementById('conta-mes').value;
+  const contaMes = contaMesValue !== '' ? parseInt(contaMesValue, 10) : mesAtual;
+  const mesDestino = !isNaN(contaMes) ? contaMes : mesAtual;
 
-if (!dados[mesDestino]) dados[mesDestino] = [];
+  if (!dados[mesDestino]) dados[mesDestino] = [];
 
-const isParcelada = document.getElementById('parcelada-conta').checked;
-const temAlerta = document.getElementById('alertas-conta').checked;
-const isRecorrente = document.getElementById('recorrente-conta').checked;
-const totalParcelas = isParcelada ? parseInt(document.getElementById('total-parcelas').value) || 1 : 1;
-const parcelaInicial = isParcelada ? parseInt(document.getElementById('parcela-atual').value) || 1 : 1;
-const descOriginal = document.getElementById('desc-conta').value;
-const valorTotal = parseFloat(document.getElementById('valor-conta').value);
-const valorParcela = isParcelada ? valorTotal / totalParcelas : valorTotal;
-const dataVencimento = document.getElementById('data-vencimento').value || '';
-const diaLembrete = temAlerta ? document.getElementById('dia-lembrete').value : '';
+  const isParcelada = document.getElementById('parcelada-conta').checked;
+  const temAlerta = document.getElementById('alertas-conta').checked;
+  const isRecorrente = document.getElementById('recorrente-conta').checked;
+  const totalParcelas = isParcelada ? parseInt(document.getElementById('total-parcelas').value, 10) || 1 : 1;
+  const parcelaInicial = isParcelada ? parseInt(document.getElementById('parcela-atual').value, 10) || 1 : 1;
+  const descOriginal = document.getElementById('desc-conta').value.trim();
+  const valorTotal = parseFloat(String(document.getElementById('valor-conta').value).replace(',', '.'));
+  const valorParcela = isParcelada ? valorTotal / totalParcelas : valorTotal;
+  const dataVencimento = document.getElementById('data-vencimento').value || '';
+  const diaLembrete = temAlerta ? document.getElementById('dia-lembrete').value : '';
+  const categoriaSelecionada = document.querySelector('#cat-select .cat-option.selected')?.dataset.cat || 'outros';
 
-if (!descOriginal || Number.isNaN(valorTotal)) {
-  alert('Preencha a descrição e o valor da conta.');
-  return;
+  if (!descOriginal || Number.isNaN(valorTotal)) {
+    alert('Preencha a descrição e o valor da conta.');
+    return;
+  }
+
+  if (isParcelada && totalParcelas < 1) {
+    alert('Informe um total de parcelas válido.');
+    return;
+  }
+
+  if (isRecorrente && !document.getElementById('data-inicio-recorrencia').value) {
+    alert('Informe a data de início da recorrência.');
+    return;
+  }
+
+  const contaBase = {
+    desc: descOriginal,
+    valor: parseFloat(valorParcela.toFixed(2)),
+    tipo: document.getElementById('tipo-conta').value,
+    cat: categoriaSelecionada,
+    pago: document.getElementById('pago-conta').checked,
+    dataVencimento: dataVencimento,
+    diaLembrete: diaLembrete,
+    alertasAtivos: temAlerta,
+    parcelada: isParcelada,
+    totalParcelas: totalParcelas,
+    parcelaNum: parcelaInicial,
+    grupoId: contaId || Date.now(),
+    recorrente: isRecorrente,
+    tipoRecorrencia: isRecorrente ? document.getElementById('tipo-recorrencia').value : null,
+    dataInicioRecorrencia: isRecorrente ? document.getElementById('data-inicio-recorrencia').value : null,
+    dataFimRecorrencia: isRecorrente ? document.getElementById('data-fim-recorrencia').value : null,
+    notificarRecorrencia: isRecorrente && document.getElementById('notificar-recorrencia').checked
+  };
+
+  if (contaId) {
+    const indexConta = dados[mesDestino].findIndex(c => String(c.id) === String(contaId));
+    if (indexConta !== -1) {
+      dados[mesDestino][indexConta] = { ...dados[mesDestino][indexConta], ...contaBase, id: dados[mesDestino][indexConta].id };
+    }
+  } else {
+    contaBase.id = Date.now();
+    dados[mesDestino].push(contaBase);
+  }
+
+  fecharModal('#modal-conta');
+  salvar();
+  selecionarMes(mesDestino);
+} catch (err) {
+  console.error('Erro ao salvar conta:', err);
+  alert('Ocorreu um erro ao salvar a conta: ' + (err.message || err));
 }
-
-if (isRecorrente && !document.getElementById('data-inicio-recorrencia').value) {
-  alert('Informe a data de início da recorrência.');
-  return;
-}
-
-const contaBase = {
-desc: descOriginal,
-valor: parseFloat(valorParcela.toFixed(2)),
-tipo: document.getElementById('tipo-conta').value,
-cat: document.querySelector('.cat-option.selected')?.dataset.cat || 'outros',
-pago: document.getElementById('pago-conta').checked,
-dataVencimento: dataVencimento,
-diaLembrete: diaLembrete,
-alertasAtivos: temAlerta,
-parcelada: isParcelada,
-totalParcelas: totalParcelas,
-parcelaNum: parcelaInicial,
-grupoId: contaId || Date.now(),
-recorrente: isRecorrente,
-tipoRecorrencia: isRecorrente ? document.getElementById('tipo-recorrencia').value : null,
-dataInicioRecorrencia: isRecorrente ? document.getElementById('data-inicio-recorrencia').value : null,
-dataFimRecorrencia: isRecorrente ? document.getElementById('data-fim-recorrencia').value : null,
-notificarRecorrencia: isRecorrente && document.getElementById('notificar-recorrencia').checked
-};
-
-if (contaId) {
-const indexConta = dados[mesDestino].findIndex(c => c.id == contaId);
-if (indexConta !== -1) {
-Object.assign(dados[mesDestino][indexConta], { ...contaBase, id: contaId });
-}
-} else {
-contaBase.id = Date.now();
-dados[mesDestino].push(contaBase);
-}
-
-salvar();
-fecharModal('#modal-conta');
 }
 
 function togglePago(mes, id) {
