@@ -725,7 +725,7 @@ body.dark-mode .drive-status { background: #1e3a5f; border-color: #2563eb; color
 
 <div id="campos-recorrente" class="form-subsection" style="display: none; background: #fef3c7;">
 <label>Tipo de Recorrência*</label>
-<select id="tipo-recorrencia" required>
+<select id="tipo-recorrencia">
 <option value="diaria">📍 Diária</option>
 <option value="semanal">📅 Semanal</option>
 <option value="mensal">📆 Mensal</option>
@@ -733,7 +733,7 @@ body.dark-mode .drive-status { background: #1e3a5f; border-color: #2563eb; color
 </select>
 
 <label>Data de Início*</label>
-<input type="date" id="data-inicio-recorrencia" required>
+<input type="date" id="data-inicio-recorrencia">
 
 <label>Data de Término (opcional - deixe em branco para sem fim)</label>
 <input type="date" id="data-fim-recorrencia">
@@ -1106,6 +1106,18 @@ abrirModal('#modal-conta');
 function toggleRecorrente() {
 const checked = document.getElementById('recorrente-conta').checked;
 document.getElementById('campos-recorrente').style.display = checked ? 'block' : 'none';
+const tipoRecorrencia = document.getElementById('tipo-recorrencia');
+const dataInicioRecorrencia = document.getElementById('data-inicio-recorrencia');
+if (checked) {
+  tipoRecorrencia.setAttribute('required', 'required');
+  dataInicioRecorrencia.setAttribute('required', 'required');
+} else {
+  tipoRecorrencia.removeAttribute('required');
+  dataInicioRecorrencia.removeAttribute('required');
+  dataInicioRecorrencia.value = '';
+  document.getElementById('data-fim-recorrencia').value = '';
+  document.getElementById('notificar-recorrencia').checked = false;
+}
 }
 
 function atualizarTelaRecorrente() {
@@ -1142,6 +1154,16 @@ const valorTotal = parseFloat(document.getElementById('valor-conta').value);
 const valorParcela = isParcelada ? valorTotal / totalParcelas : valorTotal;
 const dataVencimento = document.getElementById('data-vencimento').value || '';
 const diaLembrete = temAlerta ? document.getElementById('dia-lembrete').value : '';
+
+if (!descOriginal || Number.isNaN(valorTotal)) {
+  alert('Preencha a descrição e o valor da conta.');
+  return;
+}
+
+if (isRecorrente && !document.getElementById('data-inicio-recorrencia').value) {
+  alert('Informe a data de início da recorrência.');
+  return;
+}
 
 const contaBase = {
 desc: descOriginal,
