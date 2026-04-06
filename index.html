@@ -903,7 +903,7 @@ function renderFiltros() {
 const tiposUnicos = new Set();
 const categoriasUnicas = new Set();
 
-Object.values(dados).flat().forEach(c => {
+getTodasContasExpandidas().forEach(c => {
 tiposUnicos.add(c.tipo);
 categoriasUnicas.add(c.cat);
 });
@@ -939,7 +939,7 @@ const tiposSelecionados = Array.from(document.querySelectorAll('[data-filter="ti
 const statusSelecionados = Array.from(document.querySelectorAll('[data-filter="status"]:checked')).map(e => e.value);
 const catSelecionadas = Array.from(document.querySelectorAll('[data-filter="categoria"]:checked')).map(e => e.value);
 
-const contas = (dados[mesAtual] || []).filter(c => {
+const contas = getContasDoMes(mesAtual).filter(c => {
 let passa = true;
 
 if (busca && !c.desc.toLowerCase().includes(busca)) passa = false;
@@ -957,7 +957,7 @@ renderContas(contas);
 }
 
 function atualizar() {
-const contas = dados[mesAtual] || [];
+const contas = getContasDoMes(mesAtual);
 const receitas = contas.filter(c => c.tipo === 'receita').reduce((a, b) => a + b.valor, 0);
 const despesas = contas.filter(c => c.tipo === 'despesa').reduce((a, b) => a + b.valor, 0);
 const saldo = receitas - despesas;
@@ -996,6 +996,131 @@ if (isNaN(ano) || isNaN(mes) || isNaN(dia)) return null;
 return new Date(ano, mes, dia, 12, 0, 0, 0);
 }
 
+function formatarDataIsoLocal(data) {
+const ano = data.getFullYear();
+const mes = String(data.getMonth() + 1).padStart(2, '0');
+const dia = String(data.getDate()).padStart(2, '0');
+return `${ano}-${mes}-${dia}`;
+}
+
+function ultimoDiaDoMes(ano, mes) {
+return new Date(ano, mes + 1, 0).getDate();
+}
+
+function obterPagoDaOcorrencia(conta, dataOcorrencia) {
+if (!conta?.recorrente || !dataOcorrencia) return !!conta?.pago;
+if (!conta.recorrenciaPagamentos) conta.recorrenciaPagamentos = {};
+return !!conta.recorrenciaPagamentos[dataOcorrencia];
+}
+
+function definirPagoDaOcorrencia(conta, dataOcorrencia, pago) {
+if (!conta.recorrente || !dataOcorrencia) {
+  conta.pago = pago;
+  return;
+}
+if (!conta.recorrenciaPagamentos) conta.recorrenciaPagamentos = {};
+conta.recorrenciaPagamentos[dataOcorrencia] = pago;
+}
+
+function gerarOcorrenciasDaConta(conta, mesDestino, mesOrigem) {
+const resultado = [];
+if (!conta) return resultado;
+
+if (!conta.recorrente) {
+  if (mesOrigem === mesDestino) {
+    resultado.push({ ...conta, _mesOrigem: mesOrigem, _dataOcorrencia: conta.dataVencimento || null });
+  }
+  return resultado;
+}
+
+const inicio = parseDataLocal(conta.dataInicioRecorrencia || conta.dataVencimento);
+if (!inicio) return resultado;
+
+const fim = conta.dataFimRecorrencia ? parseDataLocal(conta.dataFimRecorrencia) : null;
+const anoRef = 2026;
+const diaBase = inicio.getDate();
+const dataVencBase = parseDataLocal(conta.dataVencimento || conta.dataInicioRecorrencia);
+const offsetDiasVencimento = dataVencBase ? Math.round((dataVencBase - inicio) / (1000 * 60 * 60 * 24)) : 0;
+
+function adicionarOcorrencia(dataReferencia) {
+  const dataVenc = new Date(dataReferencia);
+  dataVenc.setDate(dataVenc.getDate() + offsetDiasVencimento);
+  if (fim && dataVenc > fim) return;
+  const dataOcorrencia = formatarDataIsoLocal(dataVenc);
+  resultado.push({
+    ...conta,
+    pago: obterPagoDaOcorrencia(conta, dataOcorrencia),
+    dataVencimento: dataOcorrencia,
+    _mesOrigem: mesOrigem,
+    _dataOcorrencia: dataOcorrencia,
+    _instanciaRecorrente: true
+  });
+}
+
+switch (conta.tipoRecorrencia) {
+  case 'diaria': {
+    const inicioMes = new Date(anoRef, mesDestino, 1, 12, 0, 0, 0);
+    const fimMes = new Date(anoRef, mesDestino, ultimoDiaDoMes(anoRef, mesDestino), 12, 0, 0, 0);
+    let cursor = new Date(Math.max(inicio.getTime(), inicioMes.getTime()));
+    while (cursor <= fimMes) {
+      if (!fim || cursor <= fim) adicionarOcorrencia(cursor);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    break;
+  }
+  case 'semanal': {
+    const inicioMes = new Date(anoRef, mesDestino, 1, 12, 0, 0, 0);
+    let cursor = new Date(inicio);
+    while (cursor < inicioMes) cursor.setDate(cursor.getDate() + 7);
+    const fimMes = new Date(anoRef, mesDestino, ultimoDiaDoMes(anoRef, mesDestino), 12, 0, 0, 0);
+    while (cursor <= fimMes) {
+      if (!fim || cursor <= fim) adicionarOcorrencia(cursor);
+      cursor.setDate(cursor.getDate() + 7);
+    }
+    break;
+  }
+  case 'anual': {
+    if (inicio.getMonth() === mesDestino) {
+      const dia = Math.min(diaBase, ultimoDiaDoMes(anoRef, mesDestino));
+      const dataRef = new Date(anoRef, mesDestino, dia, 12, 0, 0, 0);
+      if (dataRef >= inicio && (!fim || dataRef <= fim)) adicionarOcorrencia(dataRef);
+    }
+    break;
+  }
+  case 'mensal':
+  default: {
+    const dia = Math.min(diaBase, ultimoDiaDoMes(anoRef, mesDestino));
+    const dataRef = new Date(anoRef, mesDestino, dia, 12, 0, 0, 0);
+    if (dataRef >= inicio && (!fim || dataRef <= fim)) adicionarOcorrencia(dataRef);
+    break;
+  }
+}
+
+return resultado;
+}
+
+function getContasDoMes(mes) {
+const contasMes = [];
+Object.entries(dados).forEach(([mesKey, contas]) => {
+  (contas || []).forEach(conta => {
+    contasMes.push(...gerarOcorrenciasDaConta(conta, mes, parseInt(mesKey, 10)));
+  });
+});
+return contasMes.sort((a, b) => {
+  const da = parseDataLocal(a.dataVencimento || a.dataInicioRecorrencia || '2026-01-01');
+  const db = parseDataLocal(b.dataVencimento || b.dataInicioRecorrencia || '2026-01-01');
+  return (da?.getTime() || 0) - (db?.getTime() || 0);
+});
+}
+
+function getTodasContasExpandidas() {
+let todas = [];
+for (let m = 0; m < 12; m++) {
+  todas = todas.concat(getContasDoMes(m));
+}
+return todas;
+}
+
 function fmt(v) {
 return 'R$ ' + v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
@@ -1030,9 +1155,9 @@ html += `<div style="background: white; border-radius: 8px; padding: 12px; margi
 <div style="font-size: 12px; color: #d97706;">Vence em ${diasRestantes} dia(s) - ${vencimento.toLocaleDateString('pt-BR')}</div>
 </div>
 <div style="display: flex; gap: 6px;">
-<button onclick="abrirAdicionarConta(${mesAtual}, ${c.id})" class="btn btn-small" style="padding: 6px 10px; font-size: 11px;">✏️</button>
-<button onclick="duplicarConta(${mesAtual}, ${c.id})" class="btn btn-small btn-warning" style="padding: 6px 10px; font-size: 11px;">📋</button>
-<button onclick="deletarConta(${mesAtual}, ${c.id})" class="btn btn-small btn-danger" style="padding: 6px 10px; font-size: 11px;">✕</button>
+<button onclick="abrirAdicionarConta(${typeof c._mesOrigem === 'number' ? c._mesOrigem : mesAtual}, ${c.id})" class="btn btn-small" style="padding: 6px 10px; font-size: 11px;">✏️</button>
+<button onclick="duplicarConta(${typeof c._mesOrigem === 'number' ? c._mesOrigem : mesAtual}, ${c.id})" class="btn btn-small btn-warning" style="padding: 6px 10px; font-size: 11px;">📋</button>
+<button onclick="deletarConta(${typeof c._mesOrigem === 'number' ? c._mesOrigem : mesAtual}, ${c.id})" class="btn btn-small btn-danger" style="padding: 6px 10px; font-size: 11px;">✕</button>
 </div>
 </div>`;
 });
@@ -1043,12 +1168,15 @@ const contasRestantes = contas.filter(c => !alertas.includes(c));
 html += contasRestantes.map(c => {
 const cat = categorias[c.cat] || categoriasDefault[c.cat];
 const recorrenteStr = c.recorrente ? `<span class="badge-recurring">${c.tipoRecorrencia?.toUpperCase() || 'REC'}</span>` : '';
+const mesOrigemConta = typeof c._mesOrigem === 'number' ? c._mesOrigem : mesAtual;
+const dataVencTexto = c.dataVencimento ? ` • Vence: ${parseDataLocal(c.dataVencimento)?.toLocaleDateString('pt-BR') || c.dataVencimento}` : '';
+const toggleArgs = c._dataOcorrencia ? `${mesOrigemConta}, ${c.id}, '${c._dataOcorrencia}'` : `${mesOrigemConta}, ${c.id}`;
 return `<div class="item ${c.pago ? 'paid' : ''} ${c.tipo}" style="display: flex; justify-content: space-between; align-items: center; position: relative;">
 <div style="display: flex; align-items: center; flex: 1;">
-<input type="checkbox" class="checkbox" ${c.pago ? 'checked' : ''} onchange="togglePago(${mesAtual}, ${c.id})">
+<input type="checkbox" class="checkbox" ${c.pago ? 'checked' : ''} onchange="togglePago(${toggleArgs})">
 <div class="item-info">
 <div class="item-desc">${c.desc} ${recorrenteStr}</div>
-<div class="item-cat">${cat.icone} ${cat.nome}${c.dataVencimento ? ` • Vence: ${new Date(c.dataVencimento).toLocaleDateString('pt-BR')}` : ''}</div>
+<div class="item-cat">${cat.icone} ${cat.nome}${dataVencTexto}</div>
 </div>
 </div>
 <div style="display: flex; align-items: center; gap: 8px;">
@@ -1056,9 +1184,9 @@ return `<div class="item ${c.pago ? 'paid' : ''} ${c.tipo}" style="display: flex
 ${c.tipo === 'receita' ? '+' : '-'} ${fmt(c.valor)}
 </div>
 <div style="display: flex; gap: 4px;">
-<button onclick="abrirAdicionarConta(${mesAtual}, ${c.id})" class="btn btn-small" style="padding: 6px 10px; font-size: 11px;">✏️</button>
-<button onclick="duplicarConta(${mesAtual}, ${c.id})" class="btn btn-small btn-warning" style="padding: 6px 10px; font-size: 11px;">📋</button>
-<button onclick="deletarConta(${mesAtual}, ${c.id})" class="btn btn-small btn-danger" style="padding: 6px 10px; font-size: 11px;">✕</button>
+<button onclick="abrirAdicionarConta(${mesOrigemConta}, ${c.id})" class="btn btn-small" style="padding: 6px 10px; font-size: 11px;">✏️</button>
+<button onclick="duplicarConta(${mesOrigemConta}, ${c.id})" class="btn btn-small btn-warning" style="padding: 6px 10px; font-size: 11px;">📋</button>
+<button onclick="deletarConta(${mesOrigemConta}, ${c.id})" class="btn btn-small btn-danger" style="padding: 6px 10px; font-size: 11px;">✕</button>
 </div>
 </div>
 </div>`;
@@ -1261,10 +1389,15 @@ try {
 }
 }
 
-function togglePago(mes, id) {
+function togglePago(mes, id, dataOcorrencia = null) {
 const conta = dados[mes]?.find(c => c.id === id);
 if (conta) {
-conta.pago = !conta.pago;
+if (conta.recorrente && dataOcorrencia) {
+  const pagoAtual = obterPagoDaOcorrencia(conta, dataOcorrencia);
+  definirPagoDaOcorrencia(conta, dataOcorrencia, !pagoAtual);
+} else {
+  conta.pago = !conta.pago;
+}
 salvar();
 atualizarTodasAsPaginas();
 }
@@ -1272,38 +1405,8 @@ atualizarTodasAsPaginas();
 
 // PROCESSAMENTO DE CONTAS RECORRENTES
 function processarRecorrentes() {
-const hoje = new Date();
-const anoAtual = hoje.getFullYear();
-const mesAtualData = hoje.getMonth();
-
-Object.entries(dados).forEach(([mes, contas]) => {
-contas?.forEach(c => {
-if (c.recorrente && c.dataInicioRecorrencia) {
-const dataInicio = new Date(c.dataInicioRecorrencia);
-const dataFim = c.dataFimRecorrencia ? new Date(c.dataFimRecorrencia) : null;
-
-if (dataInicio <= hoje && (!dataFim || dataFim >= hoje)) {
-const diasDesdeInicio = Math.floor((hoje - dataInicio) / (1000 * 60 * 60 * 24));
-let deveAparecerEsteMês = false;
-
-switch (c.tipoRecorrencia) {
-case 'diaria':
-deveAparecerEsteMês = true;
-break;
-case 'semanal':
-deveAparecerEsteMês = Math.floor(diasDesdeInicio / 7) * 7 <= diasDesdeInicio;
-break;
-case 'mensal':
-deveAparecerEsteMês = dataInicio.getDate() === hoje.getDate();
-break;
-case 'anual':
-deveAparecerEsteMês = dataInicio.getMonth() === mesAtualData && dataInicio.getDate() === hoje.getDate();
-break;
-}
-}
-}
-});
-});
+// As contas recorrentes são expandidas dinamicamente por mês.
+// Esta função permanece para compatibilidade do fluxo de salvamento.
 }
 
 function renderCategorias() {
@@ -1381,7 +1484,7 @@ function atualizarLembretes() {
 const hoje = new Date();
 hoje.setHours(0, 0, 0, 0);
 
-const nãoPagas = Object.values(dados).flat().filter(c => !c.pago && c.tipo === 'despesa');
+const nãoPagas = getTodasContasExpandidas().filter(c => !c.pago && c.tipo === 'despesa');
 const count = nãoPagas.length;
 document.getElementById('badge-count').textContent = count;
 }
@@ -1390,7 +1493,7 @@ function abrirLembretes() {
 const hoje = new Date();
 hoje.setHours(0, 0, 0, 0);
 
-const nãoPagas = Object.values(dados).flat().filter(c => !c.pago && c.tipo === 'despesa');
+const nãoPagas = getTodasContasExpandidas().filter(c => !c.pago && c.tipo === 'despesa');
 
 const alertas = { vencidas: [], proximas: [], outras: [] };
 
@@ -1485,7 +1588,7 @@ function renderCalendario() {
 const m = parseInt(document.getElementById('mes-calendario').value);
 const primeiroDia = new Date(2026, m, 1).getDay();
 const ultimoDia = new Date(2026, m + 1, 0).getDate();
-const contas = Object.values(dados).flat().filter(Boolean);
+const contas = getTodasContasExpandidas().filter(Boolean);
 
 let html = '';
 
@@ -1532,7 +1635,7 @@ document.getElementById('calendario-grid').innerHTML = html;
 }
 
 function abrirContasDoDia(mes, dia) {
-const contas = Object.values(dados).flat().filter(c => {
+const contas = getTodasContasExpandidas().filter(c => {
 if (!c.dataVencimento) return false;
 const dataVenc = parseDataLocal(c.dataVencimento);
 return dataVenc && dataVenc.getFullYear() === 2026 && dataVenc.getMonth() === mes && dataVenc.getDate() === dia;
@@ -1540,7 +1643,13 @@ return dataVenc && dataVenc.getFullYear() === 2026 && dataVenc.getMonth() === me
 
 if (!contas.length) return;
 
+const totalPagas = contas.filter(c => c.pago).length;
+const totalPendentes = contas.filter(c => !c.pago).length;
+
 let mensagem = `Contas do dia ${String(dia).padStart(2, '0')}/${String(mes + 1).padStart(2, '0')}/2026:
+
+✓ Pagas: ${totalPagas}
+⏳ A pagar: ${totalPendentes}
 
 `;
 mensagem += contas.map(c => `• ${c.desc} — ${fmt(c.valor)}${c.pago ? ' (Pago)' : ' (Pendente)'}`).join('\n');
@@ -1552,8 +1661,7 @@ let totalRec = 0, totalDesp = 0, maiorDesp = 0;
 let totalContas = 0, contasPagas = 0;
 const porCategoria = {};
 
-Object.values(dados).forEach(contas => {
-contas?.forEach(c => {
+getTodasContasExpandidas().forEach(c => {
 totalContas++;
 if (c.pago && c.tipo === 'despesa') contasPagas++;
 if (c.tipo === 'receita') totalRec += c.valor;
@@ -1562,7 +1670,6 @@ totalDesp += c.valor;
 maiorDesp = Math.max(maiorDesp, c.valor);
 porCategoria[c.cat] = (porCategoria[c.cat] || 0) + c.valor;
 }
-});
 });
 
 const contasPendentes = totalContas - contasPagas;
@@ -1758,7 +1865,7 @@ function verificarNotificacoes() {
 if (localStorage.getItem('notificacoes') !== 'true') return;
 if (!('Notification' in window)) return;
 
-const contas = Object.values(dados).flat();
+const contas = getTodasContasExpandidas();
 contas.forEach(c => {
 if (c.recorrente && c.notificarRecorrencia && c.dataInicioRecorrencia) {
 const dataInicio = new Date(c.dataInicioRecorrencia);
