@@ -341,6 +341,40 @@ body.dark-mode .nav {
   font-size: 9px;
 }
 
+.calendar-counts {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 2px 0 4px;
+}
+
+.calendar-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+
+.calendar-count-badge.paid {
+  background: #d1fae5;
+  color: #065f46;
+  border-color: #6ee7b7;
+}
+
+.calendar-count-badge.pending {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
 .calendar-item {
   width: 100%;
   padding: 2px;
@@ -1466,6 +1500,9 @@ const dataVenc = parseDataLocal(c.dataVencimento);
 return dataVenc && dataVenc.getFullYear() === 2026 && dataVenc.getMonth() === m && dataVenc.getDate() === d;
 });
 
+const totalPagas = contasDoDia.filter(c => c.pago).length;
+const totalPendentes = contasDoDia.filter(c => !c.pago).length;
+
 let itemsHtml = '';
 contasDoDia.slice(0, 3).forEach(c => {
 const titulo = `${c.desc} • ${fmt(c.valor)}${c.pago ? ' • Pago' : ' • Pendente'}`;
@@ -1476,9 +1513,16 @@ if (contasDoDia.length > 3) {
 itemsHtml += `<div style="font-size: 8px; color: #666; padding: 1px; text-align: center;">+${contasDoDia.length - 3}</div>`;
 }
 
+const countsHtml = contasDoDia.length ? `
+<div class="calendar-counts">
+  ${totalPagas ? `<span class="calendar-count-badge paid" title="${totalPagas} conta(s) paga(s)">✓ ${totalPagas}</span>` : ''}
+  ${totalPendentes ? `<span class="calendar-count-badge pending" title="${totalPendentes} conta(s) pendente(s)">⏳ ${totalPendentes}</span>` : ''}
+</div>` : '';
+
 html += `
 <div class="calendar-day" onclick="abrirContasDoDia(${m}, ${d})">
 <div class="calendar-day-num">${d}</div>
+${countsHtml}
 <div class="calendar-day-items">${itemsHtml}</div>
 </div>
 `;
