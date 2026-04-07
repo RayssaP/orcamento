@@ -281,9 +281,98 @@ body.dark-mode .nav {
 
 .filter-container {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.filter-card-mobile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  min-height: 50px;
+  transition: all 0.2s ease;
+}
+
+.filter-card-mobile:hover {
+  border-color: var(--secondary);
+  background: #f8fbff;
+}
+
+.filter-card-mobile input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.filter-card-mobile label {
+  margin: 0;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.filter-select-card {
+  background: #fff;
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+
+.filter-select-card label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+.filter-select-wrap {
+  position: relative;
+}
+
+.filter-select-wrap select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 100%;
+  padding: 13px 42px 13px 12px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 0;
+}
+
+.filter-select-wrap::after {
+  content: '▾';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  color: var(--secondary);
+  pointer-events: none;
+}
+
+body.dark-mode .filter-card-mobile,
+body.dark-mode .filter-select-card,
+body.dark-mode .filter-select-wrap select {
+  background: #1f2937;
+  border-color: #374151;
+  color: #e5e7eb;
 }
 
 .filter-item {
@@ -467,6 +556,9 @@ body.dark-mode .nav {
   .summary { grid-template-columns: 1fr; }
   .calendar-day { font-size: 10px; }
   .stats-grid { grid-template-columns: 1fr; }
+  .filter-container { grid-template-columns: 1fr; gap: 10px; }
+  .search-box { font-size: 16px; padding: 14px; border-radius: 14px; }
+  .month-btn { min-width: 86px; padding: 12px 14px; border-radius: 14px; font-size: 16px; font-weight: 600; }
 }
 
 /* GOOGLE DRIVE SYNC */
