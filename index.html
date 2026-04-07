@@ -416,6 +416,23 @@ body.dark-mode .nav {
   margin-bottom: 16px;
 }
 
+.filter-select-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.filter-select-wrap label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.filter-select-wrap select {
+  margin-bottom: 0;
+}
+
 .stat-card {
   background: var(--light);
   padding: 16px;
@@ -509,6 +526,7 @@ body.dark-mode .drive-status { background: #1e3a5f; border-color: #2563eb; color
 <h3>🔍 Buscar e Filtrar</h3>
 <input type="text" id="search-input" class="search-box" placeholder="Buscar contas..." onkeyup="aplicarFiltros()">
 <div class="filter-container" id="filtros-container"></div>
+<div id="filtro-categoria-wrap" style="margin-top: 10px;"></div>
 </div>
 
 <div class="card">
@@ -813,7 +831,7 @@ body.dark-mode .drive-status { background: #1e3a5f; border-color: #2563eb; color
 <div class="modal" id="modal-lembretes">
 <div class="modal-content">
 <div class="modal-header">
-<span>🔔 Lembretes e Alertas</span>
+<span>🔔 Lembretes e Alertas do Mês</span>
 <button class="close-btn" onclick="fecharModal('#modal-lembretes')">✕</button>
 </div>
 <div id="lista-lembretes"></div>
@@ -904,40 +922,43 @@ const tiposUnicos = new Set();
 const categoriasUnicas = new Set();
 
 getTodasContasExpandidas().forEach(c => {
-tiposUnicos.add(c.tipo);
-categoriasUnicas.add(c.cat);
+  tiposUnicos.add(c.tipo);
+  categoriasUnicas.add(c.cat);
 });
 
 let html = '';
 
-// Filtro por tipo
 if (tiposUnicos.size > 0) {
-html += '<div class="filter-item"><label><input type="checkbox" class="filter-check" data-filter="tipo" value="receita" onchange="aplicarFiltros()"> 📥 Receita</label></div>';
-html += '<div class="filter-item"><label><input type="checkbox" class="filter-check" data-filter="tipo" value="despesa" onchange="aplicarFiltros()"> 📤 Despesa</label></div>';
+  html += '<div class="filter-item"><label><input type="checkbox" class="filter-check" data-filter="tipo" value="receita" onchange="aplicarFiltros()"> 📥 Receita</label></div>';
+  html += '<div class="filter-item"><label><input type="checkbox" class="filter-check" data-filter="tipo" value="despesa" onchange="aplicarFiltros()"> 📤 Despesa</label></div>';
 }
 
-// Filtro por status
 html += '<div class="filter-item"><label><input type="checkbox" class="filter-check" data-filter="status" value="pago" onchange="aplicarFiltros()"> ✓ Pago</label></div>';
 html += '<div class="filter-item"><label><input type="checkbox" class="filter-check" data-filter="status" value="pendente" onchange="aplicarFiltros()"> ⏳ Pendente</label></div>';
 
-// Filtro por categoria
-if (categoriasUnicas.size > 0) {
-categoriasUnicas.forEach(cat => {
-const catInfo = categorias[cat] || categoriasDefault[cat];
-if (catInfo) {
-html += `<div class="filter-item"><label><input type="checkbox" class="filter-check" data-filter="categoria" value="${cat}" onchange="aplicarFiltros()"> ${catInfo.icone} ${catInfo.nome}</label></div>`;
-}
-});
-}
-
 document.getElementById('filtros-container').innerHTML = html;
+
+let selectHtml = '<div class="filter-select-wrap">';
+selectHtml += '<label for="filtro-categoria-select">Categoria</label>';
+selectHtml += '<select id="filtro-categoria-select" onchange="aplicarFiltros()">';
+selectHtml += '<option value="">Todas as categorias</option>';
+
+Array.from(categoriasUnicas).forEach(cat => {
+  const catInfo = categorias[cat] || categoriasDefault[cat];
+  if (catInfo) {
+    selectHtml += `<option value="${cat}">${catInfo.icone} ${catInfo.nome}</option>`;
+  }
+});
+
+selectHtml += '</select></div>';
+document.getElementById('filtro-categoria-wrap').innerHTML = selectHtml;
 }
 
 function aplicarFiltros() {
 const busca = document.getElementById('search-input').value.toLowerCase();
 const tiposSelecionados = Array.from(document.querySelectorAll('[data-filter="tipo"]:checked')).map(e => e.value);
 const statusSelecionados = Array.from(document.querySelectorAll('[data-filter="status"]:checked')).map(e => e.value);
-const catSelecionadas = Array.from(document.querySelectorAll('[data-filter="categoria"]:checked')).map(e => e.value);
+const categoriaSelecionada = document.getElementById('filtro-categoria-select')?.value || '';
 
 const contas = getContasDoMes(mesAtual).filter(c => {
 let passa = true;
@@ -948,7 +969,7 @@ if (statusSelecionados.length > 0) {
 const status = c.pago ? 'pago' : 'pendente';
 if (!statusSelecionados.includes(status)) passa = false;
 }
-if (catSelecionadas.length > 0 && !catSelecionadas.includes(c.cat)) passa = false;
+if (categoriaSelecionada && c.cat !== categoriaSelecionada) passa = false;
 
 return passa;
 });
@@ -1486,12 +1507,27 @@ renderCategorias();
 }
 }
 
-function atualizarLembretes() {
+function obterAlertasDoMesSelecionado() {
 const hoje = new Date();
 hoje.setHours(0, 0, 0, 0);
 
-const nãoPagas = getTodasContasExpandidas().filter(c => !c.pago && c.tipo === 'despesa');
-const count = nãoPagas.length;
+return getContasDoMes(mesAtual).filter(c => {
+  if (c.pago || c.tipo !== 'despesa' || !c.dataVencimento) return false;
+  const vencimento = parseDataLocal(c.dataVencimento);
+  if (!vencimento) return false;
+  vencimento.setHours(0, 0, 0, 0);
+  const diasRestantes = Math.ceil((vencimento - hoje) / (1000 * 60 * 60 * 24));
+  return diasRestantes <= 7;
+}).map(c => {
+  const vencimento = parseDataLocal(c.dataVencimento);
+  vencimento.setHours(0, 0, 0, 0);
+  const diasRestantes = Math.ceil((vencimento - hoje) / (1000 * 60 * 60 * 24));
+  return { ...c, diasRestantes };
+});
+}
+
+function atualizarLembretes() {
+const count = obterAlertasDoMesSelecionado().length;
 document.getElementById('badge-count').textContent = count;
 }
 
@@ -1499,11 +1535,11 @@ function abrirLembretes() {
 const hoje = new Date();
 hoje.setHours(0, 0, 0, 0);
 
-const nãoPagas = getTodasContasExpandidas().filter(c => !c.pago && c.tipo === 'despesa');
+const alertasDoMes = obterAlertasDoMesSelecionado();
 
 const alertas = { vencidas: [], proximas: [], outras: [] };
 
-nãoPagas.forEach(c => {
+alertasDoMes.forEach(c => {
 if (c.dataVencimento) {
 const vencimento = parseDataLocal(c.dataVencimento);
 vencimento.setHours(0, 0, 0, 0);
