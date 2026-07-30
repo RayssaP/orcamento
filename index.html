@@ -246,6 +246,14 @@
     .nav-btn span { display: block; font-size: 20px; margin-bottom: 4px; }
     .nav-btn.active { color: var(--primary); font-weight: 800; }
 
+    .month-view-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    .month-view-nav { display:flex; align-items:center; gap:10px; }
+    .month-view-title { min-width:170px; text-align:center; font-size:17px; }
+    .monthly-status-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+    .monthly-section-title { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
+    .monthly-section-title h3 { margin:0; }
+    @media (max-width: 760px) { .monthly-status-grid { grid-template-columns:1fr 1fr; } .month-view-title{min-width:130px;font-size:15px;} }
+
     .modal {
       position: fixed;
       inset: 0;
@@ -349,6 +357,56 @@
         <button class="period-tab active" data-period="month">Este mês</button>
         <button class="period-tab" data-period="30days">Próximos 30 dias</button>
         <button class="period-tab" data-period="year">Este ano</button>
+      </div>
+
+      <div id="dashboard-monthly-view" class="section-spacer">
+      <article class="card">
+        <div class="month-view-toolbar">
+          <div>
+            <h2 style="margin:0">Visão do mês</h2>
+            <div class="muted">Navegue pelos meses para ver receitas, compromissos e o que espera você pela frente</div>
+          </div>
+          <div class="month-view-nav">
+            <button class="btn btn-soft btn-small" onclick="changeMonthlyView(-1)">‹</button>
+            <strong id="monthlyViewTitle" class="month-view-title"></strong>
+            <button class="btn btn-soft btn-small" onclick="changeMonthlyView(1)">›</button>
+            <button class="btn btn-small" onclick="goMonthlyToday()">Mês atual</button>
+          </div>
+        </div>
+      </article>
+
+      <div class="grid grid-4 section-spacer">
+        <article class="card metric"><div class="metric-label">Receitas do mês</div><div class="metric-value" id="monthlyIncome">R$ 0,00</div><div class="metric-hint" id="monthlyIncomeHint"></div></article>
+        <article class="card metric"><div class="metric-label">Despesas do mês</div><div class="metric-value" id="monthlyExpense">R$ 0,00</div><div class="metric-hint" id="monthlyExpenseHint"></div></article>
+        <article class="card metric"><div class="metric-label">Saldo previsto</div><div class="metric-value" id="monthlyProjected">R$ 0,00</div><div class="metric-hint">Receitas menos despesas do mês</div></article>
+        <article class="card metric warning"><div class="metric-label">Ainda a pagar</div><div class="metric-value" id="monthlyPending">R$ 0,00</div><div class="metric-hint" id="monthlyPendingHint"></div></article>
+      </div>
+
+      <article class="card section-spacer">
+        <div class="monthly-status-grid">
+          <div><div class="metric-label">Recebido</div><div class="metric-value" id="monthlyReceived">R$ 0,00</div></div>
+          <div><div class="metric-label">Pago</div><div class="metric-value" id="monthlyPaid">R$ 0,00</div></div>
+          <div><div class="metric-label">A receber</div><div class="metric-value" id="monthlyReceivable">R$ 0,00</div></div>
+          <div><div class="metric-label">Resultado realizado</div><div class="metric-value" id="monthlyRealized">R$ 0,00</div></div>
+        </div>
+      </article>
+
+      <div class="grid grid-2 section-spacer">
+        <article class="card">
+          <div class="monthly-section-title"><div><h3>Contas pendentes</h3><div class="muted">Inclui vencidas e próximas do mês</div></div><button class="btn btn-primary btn-small" onclick="openTransactionModal()">+ Novo</button></div>
+          <div id="monthlyPendingList" class="list"></div>
+        </article>
+        <article class="card">
+          <div class="monthly-section-title"><div><h3>Pagamentos e recebimentos concluídos</h3><div class="muted">Movimentações já realizadas</div></div></div>
+          <div id="monthlyPaidList" class="list"></div>
+        </article>
+      </div>
+
+      <article class="card section-spacer">
+        <div class="monthly-section-title"><div><h3>Resumo por categoria</h3><div class="muted">Despesas previstas no mês selecionado</div></div></div>
+        <div id="monthlyCategorySummary"></div>
+      </article>
+
       </div>
 
       <div class="grid grid-4">
@@ -648,6 +706,7 @@
     let goals = [];
     let dashboardPeriod = 'month';
     let calendarDate = new Date();
+    let monthlyViewDate = new Date();
     let charts = {};
 
     const $ = id => document.getElementById(id);
@@ -836,6 +895,55 @@
     }
 
 
+    function monthlyTransactions(date = monthlyViewDate) {
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      return allTransactions().filter(t => {
+        const d = localDate(t.dataVencimento) || localDate(`${t.competencia}-01`);
+        return d && d.getFullYear() === year && d.getMonth() === month;
+      });
+    }
+
+    function renderMonthlyView() {
+      const year = monthlyViewDate.getFullYear();
+      const month = monthlyViewDate.getMonth();
+      const list = monthlyTransactions();
+      const income = list.filter(t => t.tipo === 'receita');
+      const expense = list.filter(t => t.tipo === 'despesa');
+      const received = income.filter(t => t.pago);
+      const paid = expense.filter(t => t.pago);
+      const receivable = income.filter(t => !t.pago);
+      const pending = expense.filter(t => !t.pago).sort(prioritySort);
+
+      $('monthlyViewTitle').textContent = `${monthNames[month]} de ${year}`;
+      $('monthlyIncome').textContent = money(sum(income));
+      $('monthlyExpense').textContent = money(sum(expense));
+      $('monthlyProjected').textContent = money(sum(income) - sum(expense));
+      $('monthlyPending').textContent = money(sum(pending));
+      $('monthlyReceived').textContent = money(sum(received));
+      $('monthlyPaid').textContent = money(sum(paid));
+      $('monthlyReceivable').textContent = money(sum(receivable));
+      $('monthlyRealized').textContent = money(sum(received) - sum(paid));
+      $('monthlyIncomeHint').textContent = `${income.length} receita(s) no mês`;
+      $('monthlyExpenseHint').textContent = `${expense.length} despesa(s) no mês`;
+      $('monthlyPendingHint').textContent = `${pending.length} conta(s) pendente(s)`;
+
+      $('monthlyPendingList').innerHTML = pending.map(transactionHTML).join('') || '<div class="empty">Nenhuma conta pendente neste mês.</div>';
+      const completed = list.filter(t => t.pago).sort((a,b) => (localDate(b.dataPagamento || b.dataVencimento)?.getTime() || 0) - (localDate(a.dataPagamento || a.dataVencimento)?.getTime() || 0));
+      $('monthlyPaidList').innerHTML = completed.map(transactionHTML).join('') || '<div class="empty">Nenhum pagamento ou recebimento concluído neste mês.</div>';
+
+      const rows = Object.entries(categories).map(([key, cat]) => {
+        const total = sum(expense.filter(t => t.cat === key));
+        const paidValue = sum(expense.filter(t => t.cat === key && t.pago));
+        return { cat, total, paidValue };
+      }).filter(x => x.total > 0).sort((a,b) => b.total-a.total);
+      const max = Math.max(1, ...rows.map(r => r.total));
+      $('monthlyCategorySummary').innerHTML = rows.map(r => `<div class="progress-row"><div class="progress-head"><strong>${r.cat.icone} ${escapeHTML(r.cat.nome)}</strong><span>${money(r.total)} · pago ${money(r.paidValue)}</span></div><div class="progress-track"><div class="progress-bar" style="width:${Math.round(r.total/max*100)}%"></div></div></div>`).join('') || '<div class="empty">Nenhuma despesa neste mês.</div>';
+    }
+
+    function changeMonthlyView(delta) { monthlyViewDate.setMonth(monthlyViewDate.getMonth()+delta); renderMonthlyView(); }
+    function goMonthlyToday() { monthlyViewDate = new Date(); renderMonthlyView(); }
+
     function renderCalendar() {
       const year = calendarDate.getFullYear();
       const month = calendarDate.getMonth();
@@ -978,6 +1086,7 @@
       renderGoals();
       if ($('page-analytics').classList.contains('active')) renderAnalytics();
       if ($('page-calendar').classList.contains('active')) renderCalendar();
+      renderMonthlyView();
     }
 
     function navigate(page) {
@@ -986,6 +1095,7 @@
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
       if (page === 'analytics') setTimeout(renderAnalytics, 0);
       if (page === 'transactions') renderTransactions();
+      if (page === 'calendar') renderCalendar();
     }
 
     function setTransactionQuickFilter(status) {
