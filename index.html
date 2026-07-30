@@ -198,6 +198,7 @@
     .field:focus, .select:focus { border-color: var(--primary-2); box-shadow: 0 0 0 3px rgba(36, 102, 95, .12); }
 
     .section-spacer { margin-top: 16px; }
+    .category-summary-card { margin-bottom: 12px; }
     .muted { color: var(--muted); }
     .empty { text-align: center; padding: 34px 16px; color: var(--muted); }
 
@@ -352,13 +353,6 @@
     </header>
 
     <section id="page-dashboard" class="page active">
-      <div class="period-tabs" id="periodTabs">
-        <button class="period-tab" data-period="today">Hoje</button>
-        <button class="period-tab active" data-period="month">Este mês</button>
-        <button class="period-tab" data-period="30days">Próximos 30 dias</button>
-        <button class="period-tab" data-period="year">Este ano</button>
-      </div>
-
       <div id="dashboard-monthly-view" class="section-spacer">
       <article class="card">
         <div class="month-view-toolbar">
@@ -402,7 +396,7 @@
         </article>
       </div>
 
-      <article class="card section-spacer">
+      <article class="card section-spacer category-summary-card">
         <div class="monthly-section-title"><div><h3>Resumo por categoria</h3><div class="muted">Despesas previstas no mês selecionado</div></div></div>
         <div id="monthlyCategorySummary"></div>
       </article>
@@ -444,28 +438,6 @@
           <div id="overduePreview" class="list"></div>
         </article>
 
-        <article class="card">
-          <div class="card-header">
-            <div>
-              <h2>Projeção</h2>
-              <div class="muted">Como o período selecionado deve terminar</div>
-            </div>
-          </div>
-          <div class="grid grid-2">
-            <div>
-              <div class="metric-label">Receitas previstas</div>
-              <div class="metric-value" id="projectionIncome">R$ 0,00</div>
-            </div>
-            <div>
-              <div class="metric-label">Despesas previstas</div>
-              <div class="metric-value" id="projectionExpense">R$ 0,00</div>
-            </div>
-          </div>
-          <div class="section-spacer">
-            <div class="metric-label">Saldo projetado</div>
-            <div class="metric-value" id="projectionBalance">R$ 0,00</div>
-          </div>
-        </article>
       </div>
 
       <article class="card section-spacer">
@@ -539,6 +511,13 @@
           <div id="goalList" class="list"></div>
         </article>
       </div>
+      <article class="card section-spacer">
+        <div class="card-header">
+          <div><h2>Categorias</h2><div class="muted">Edite nomes e ícones usados em todo o aplicativo</div></div>
+          <button class="btn btn-primary btn-small" onclick="openCategoryModal()">+ Nova categoria</button>
+        </div>
+        <div id="categoryList" class="list"></div>
+      </article>
     </section>
 
 
@@ -597,7 +576,7 @@
               <button id="btn-drive-load" class="btn btn-soft" onclick="driveLoad(true)" style="display:none">Carregar da nuvem</button>
               <button id="btn-drive-logout" class="btn" onclick="driveLogout()" style="display:none">Desconectar</button>
             </div>
-            <div id="drive-autosync-row" class="setting-row" style="display:none;margin-top:10px"><span>Sincronizar automaticamente</span><button class="toggle" id="toggle-autosync" onclick="toggleDriveAutoSync()"></button></div>
+            <div id="drive-autosync-row" class="setting-row" style="display:none;margin-top:10px"><span>Sincronizar automaticamente a cada 5 minutos</span><button class="toggle" id="toggle-autosync" onclick="toggleDriveAutoSync()"></button></div>
             <div id="drive-last-sync" class="muted" style="font-size:11px;text-align:center;margin-top:8px"></div>
           </div>
           <div class="settings-list">
@@ -663,6 +642,20 @@
           </div>
         </details>
         <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('transactionModal')">Cancelar</button><button class="btn btn-primary" type="submit">Salvar</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal" id="categoryModal">
+    <div class="modal-content">
+      <div class="modal-header"><h2 id="categoryModalTitle">Nova categoria</h2><button class="icon-btn" onclick="closeModal('categoryModal')">✕</button></div>
+      <form id="categoryForm">
+        <input type="hidden" id="categoryId" />
+        <div class="form-grid">
+          <div class="form-group"><label>Ícone</label><input id="categoryIcon" class="field" value="📦" maxlength="8" /></div>
+          <div class="form-group"><label>Nome</label><input id="categoryName" class="field" required placeholder="Ex.: Assinaturas" /></div>
+        </div>
+        <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('categoryModal')">Cancelar</button><button class="btn btn-primary" type="submit">Salvar categoria</button></div>
       </form>
     </div>
   </div>
@@ -853,9 +846,6 @@
       const periodTx = all.filter(t => inRange(t, dashboardPeriod));
       const projectedIncome = sum(periodTx.filter(t => t.tipo === 'receita'));
       const projectedExpense = sum(periodTx.filter(t => t.tipo === 'despesa'));
-      $('projectionIncome').textContent = money(projectedIncome);
-      $('projectionExpense').textContent = money(projectedExpense);
-      $('projectionBalance').textContent = money(projectedIncome - projectedExpense);
 
       const overdue = pendingExpense.filter(t => statusOf(t) === 'vencida');
       $('attentionSummary').textContent = overdue.length ? `${overdue.length} conta(s) vencida(s), total de ${money(sum(overdue))}.` : 'Nenhuma conta vencida.';
@@ -1014,6 +1004,77 @@
       }).join('');
     }
 
+    function renderCategories() {
+      const entries = Object.entries(categories).sort((a,b) => a[1].nome.localeCompare(b[1].nome, 'pt-BR'));
+      $('categoryList').innerHTML = entries.map(([key, cat]) => {
+        const usage = allTransactions().filter(t => t.cat === key).length;
+        return `<div class="transaction">
+          <div class="transaction-icon">${escapeHTML(cat.icone || '📦')}</div>
+          <div class="transaction-main">
+            <div class="transaction-title">${escapeHTML(cat.nome)}</div>
+            <div class="transaction-meta">${usage} lançamento${usage === 1 ? '' : 's'}</div>
+          </div>
+          <div class="transaction-actions">
+            <button class="btn btn-soft btn-small" onclick="editCategory('${key}')">Editar</button>
+            ${key !== 'outros' ? `<button class="btn btn-danger btn-small" onclick="deleteCategory('${key}')">Excluir</button>` : ''}
+          </div>
+        </div>`;
+      }).join('') || '<div class="empty">Nenhuma categoria cadastrada.</div>';
+    }
+
+    function openCategoryModal() {
+      $('categoryForm').reset();
+      $('categoryId').value = '';
+      $('categoryIcon').value = '📦';
+      $('categoryModalTitle').textContent = 'Nova categoria';
+      $('categoryModal').classList.add('active');
+    }
+
+    function editCategory(id) {
+      const category = categories[id];
+      if (!category) return;
+      $('categoryId').value = id;
+      $('categoryIcon').value = category.icone || '📦';
+      $('categoryName').value = category.nome || '';
+      $('categoryModalTitle').textContent = 'Editar categoria';
+      $('categoryModal').classList.add('active');
+    }
+
+    function saveCategory(event) {
+      event.preventDefault();
+      const currentId = $('categoryId').value;
+      const name = $('categoryName').value.trim();
+      const icon = $('categoryIcon').value.trim() || '📦';
+      if (!name) return;
+      if (currentId) {
+        categories[currentId] = { ...categories[currentId], nome:name, icone:icon };
+      } else {
+        const base = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'categoria';
+        let id = base;
+        let n = 2;
+        while (categories[id]) id = `${base}_${n++}`;
+        categories[id] = { nome:name, icone:icon };
+      }
+      closeModal('categoryModal');
+      saveData();
+    }
+
+    function deleteCategory(id) {
+      if (!categories[id] || id === 'outros') return;
+      const used = allTransactions().some(t => t.cat === id);
+      const message = used
+        ? 'Esta categoria está sendo usada. Ao excluí-la, os lançamentos serão movidos para Outros. Continuar?'
+        : 'Excluir esta categoria?';
+      if (!confirm(message)) return;
+      Object.values(dataByMonth).forEach(list => (list || []).forEach(item => { if (item.cat === id) item.cat = 'outros'; }));
+      if (budgets[id] != null) {
+        budgets.outros = Number(budgets.outros || 0) + Number(budgets[id] || 0);
+        delete budgets[id];
+      }
+      delete categories[id];
+      saveData();
+    }
+
     function renderBudgetPreview() {
       const expenses = allTransactions().filter(t => t.tipo === 'despesa' && inRange(t, 'month'));
       const rows = Object.entries(categories).map(([key, cat]) => {
@@ -1084,6 +1145,7 @@
       renderTransactions();
       renderBudgets();
       renderGoals();
+      renderCategories();
       if ($('page-analytics').classList.contains('active')) renderAnalytics();
       if ($('page-calendar').classList.contains('active')) renderCalendar();
       renderMonthlyView();
@@ -1274,6 +1336,7 @@
     const DRIVE_FILE_NAME = 'minha_vida_financeira_sync.json';
     const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
     let driveTokenClient = null, driveAccessToken = null, driveFileId = null, driveConnected = false, driveInitDone = false;
+    let driveAutoSyncTimer = null, driveSaveInProgress = false;
 
     function driveSetStatus(text, type='') {
       const badge=$('drive-status-badge'); if (!badge) return;
@@ -1287,6 +1350,20 @@
       $('btn-drive-logout').style.display=logged?'':'none';
       $('drive-autosync-row').style.display=logged?'flex':'none';
       $('toggle-autosync').classList.toggle('on', logged && localStorage.getItem('drive_autosync')==='true');
+      updateDriveAutoSyncTimer();
+    }
+    function updateDriveAutoSyncTimer() {
+      if (driveAutoSyncTimer) {
+        clearInterval(driveAutoSyncTimer);
+        driveAutoSyncTimer = null;
+      }
+      const enabled = localStorage.getItem('drive_autosync') === 'true';
+      if (!enabled || !driveConnected || !driveAccessToken) return;
+      driveAutoSyncTimer = setInterval(() => {
+        if (!document.hidden && driveConnected && driveAccessToken && !driveSaveInProgress) {
+          driveSave(false);
+        }
+      }, 5 * 60 * 1000);
     }
     function driveLastSync(ts) { $('drive-last-sync').textContent=ts ? 'Última sincronização: '+new Date(Number(ts)).toLocaleString('pt-BR') : ''; }
     function driveInit() {
@@ -1312,18 +1389,21 @@
       driveAccessToken=resp.access_token; gapi.client.setToken({access_token:driveAccessToken});
       localStorage.setItem('drive_token',JSON.stringify({token:driveAccessToken,expiry:Date.now()+55*60*1000}));
       try { const me=await gapi.client.request({path:'https://www.googleapis.com/oauth2/v2/userinfo'}); const email=me.result.email; localStorage.setItem('drive_email',email); $('drive-user-info').textContent='Conectado como '+email; $('drive-user-info').style.display='block'; } catch(e) {}
-      driveSetButtons(true); driveSetStatus('Conectado','ok'); driveLastSync(localStorage.getItem('drive_last_sync'));
+      driveSetButtons(true); driveSetStatus('Conectado','ok'); driveLastSync(localStorage.getItem('drive_last_sync')); updateDriveAutoSyncTimer();
     }
     function driveLogin(){ if(!driveInitDone||!driveTokenClient){driveInit();alert('A integração do Google ainda está carregando. Tente novamente em alguns segundos.');return;} driveTokenClient.requestAccessToken({prompt:'consent'}); }
-    function driveLogout(){ if(driveAccessToken) google.accounts.oauth2.revoke(driveAccessToken); driveAccessToken=null;driveFileId=null;localStorage.removeItem('drive_token');localStorage.removeItem('drive_email');driveSetButtons(false);driveSetStatus('Desconectado');$('drive-user-info').style.display='none'; }
+    function driveLogout(){ if(driveAccessToken) google.accounts.oauth2.revoke(driveAccessToken); driveAccessToken=null;driveFileId=null; if(driveAutoSyncTimer){clearInterval(driveAutoSyncTimer);driveAutoSyncTimer=null;} localStorage.removeItem('drive_token');localStorage.removeItem('drive_email');driveSetButtons(false);driveSetStatus('Desconectado');$('drive-user-info').style.display='none'; }
     async function driveFindFile(){ if(driveFileId)return driveFileId; const res=await gapi.client.drive.files.list({q:`name='${DRIVE_FILE_NAME}' and trashed=false`,fields:'files(id,name)',spaces:'drive'}); driveFileId=res.result.files?.[0]?.id||null; return driveFileId; }
     function drivePayload(){ return {version:4,updatedAt:new Date().toISOString(),dados:dataByMonth,categorias:categories,budgets,goals}; }
     async function driveSave(manual=false){
       if(!driveConnected||!driveAccessToken){if(manual)alert('Conecte ao Google Drive primeiro.');return;}
+      if(driveSaveInProgress){if(manual)alert('Já existe uma sincronização em andamento.');return;}
+      driveSaveInProgress=true;
       driveSetStatus('Sincronizando…','sync');
       try { const fid=await driveFindFile(); const boundary='---finance_boundary---'; const meta=JSON.stringify({name:DRIVE_FILE_NAME,mimeType:'application/json'}); const payload=JSON.stringify(drivePayload(),null,2); const body=`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${payload}\r\n--${boundary}--`;
         const res=await gapi.client.request({path:fid?`https://www.googleapis.com/upload/drive/v3/files/${fid}?uploadType=multipart`:'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',method:fid?'PATCH':'POST',headers:{'Content-Type':`multipart/related; boundary=${boundary}`},body}); if(!fid)driveFileId=res.result.id; const ts=Date.now();localStorage.setItem('drive_last_sync',ts);driveLastSync(ts);driveSetStatus('Sincronizado','ok');if(manual)alert('Dados salvos no Google Drive.');
       } catch(e){console.error(e);driveSetStatus('Erro ao salvar','err');if(manual)alert('Não foi possível salvar no Drive: '+(e.result?.error?.message||e.message||e));}
+      finally { driveSaveInProgress=false; }
     }
     async function driveLoad(manual=false){
       if(!driveConnected||!driveAccessToken){if(manual)alert('Conecte ao Google Drive primeiro.');return;}
@@ -1331,7 +1411,7 @@
       try { const fid=await driveFindFile(); if(!fid){driveSetStatus('Conectado','ok');if(manual)alert('Nenhum backup foi encontrado.');return;} if(manual&&!confirm('Carregar o backup do Google Drive e substituir os dados locais?')){driveSetStatus('Conectado','ok');return;} const res=await gapi.client.drive.files.get({fileId:fid,alt:'media'}); const b=typeof res.result==='string'?JSON.parse(res.result):res.result; dataByMonth=b.dados||{};categories=b.categorias||{...defaultCategories};budgets=b.budgets||{};goals=b.goals||[]; localStorage.setItem('orcamento_dados',JSON.stringify(dataByMonth));localStorage.setItem('orcamento_cats',JSON.stringify(categories));localStorage.setItem('orcamento_budgets',JSON.stringify(budgets));localStorage.setItem('orcamento_goals',JSON.stringify(goals));const ts=Date.now();localStorage.setItem('drive_last_sync',ts);driveLastSync(ts);driveSetStatus('Sincronizado','ok');renderAll();if(manual)alert('Backup carregado com sucesso.');
       } catch(e){console.error(e);driveSetStatus('Erro ao carregar','err');if(manual)alert('Não foi possível carregar do Drive: '+(e.result?.error?.message||e.message||e));}
     }
-    function toggleDriveAutoSync(){ const next=localStorage.getItem('drive_autosync')!=='true';localStorage.setItem('drive_autosync',String(next));$('toggle-autosync').classList.toggle('on',next);if(next)driveSave(false); }
+    function toggleDriveAutoSync(){ const next=localStorage.getItem('drive_autosync')!=='true';localStorage.setItem('drive_autosync',String(next));$('toggle-autosync').classList.toggle('on',next);updateDriveAutoSyncTimer();if(next)driveSave(false); }
 
     function escapeHTML(value='') { return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 
@@ -1343,6 +1423,7 @@
     ['filterSearch','filterStatus','filterType','filterCategory','filterPeriod'].forEach(id => $(id).addEventListener(id === 'filterSearch' ? 'input' : 'change', renderTransactions));
     $('transactionForm').addEventListener('submit', saveTransaction);
     $('goalForm').addEventListener('submit', saveGoal);
+    $('categoryForm').addEventListener('submit', saveCategory);
     $('txRecurring').addEventListener('change', e => $('recurringFields').classList.toggle('hidden', !e.target.checked));
     $('txInstallment').addEventListener('change', e => $('installmentFields').classList.toggle('hidden', !e.target.checked));
     $('themeBtn').addEventListener('click', toggleTheme);
@@ -1350,6 +1431,9 @@
     $('exportBtn').addEventListener('click', exportData);
     $('importFile').addEventListener('change', e => e.target.files[0] && importData(e.target.files[0]));
     document.querySelectorAll('.modal').forEach(modal => modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('active'); }));
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) updateDriveAutoSyncTimer();
+    });
 
     $('todayLabel').textContent = new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
     loadData();
