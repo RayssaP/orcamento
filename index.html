@@ -6,6 +6,8 @@
   <meta name="theme-color" content="#153f3b" />
   <title>Minha Vida Financeira</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
   <style>
     :root {
       --bg: #f5f7f6;
@@ -231,7 +233,7 @@
       backdrop-filter: blur(16px);
       border-top: 1px solid var(--border);
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(6, 1fr);
       z-index: 100;
     }
     .nav-btn {
@@ -276,6 +278,31 @@
     .settings-list { display: flex; flex-direction: column; gap: 10px; }
     .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 14px; background: var(--surface-soft); border-radius: 14px; }
 
+    .calendar-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+    .calendar-nav { display:flex; align-items:center; gap:8px; }
+    .calendar-weekdays, .calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; }
+    .calendar-weekdays div { text-align:center; color:var(--muted); font-size:12px; font-weight:800; padding:6px; }
+    .calendar-day { min-height:112px; border:1px solid var(--border); background:var(--surface-soft); border-radius:15px; padding:9px; overflow:hidden; }
+    .calendar-day.outside { opacity:.38; }
+    .calendar-day.today { border:2px solid var(--primary-2); }
+    .calendar-day-number { font-size:13px; font-weight:800; margin-bottom:7px; display:flex; justify-content:space-between; }
+    .calendar-day-total { font-size:10px; color:var(--muted); }
+    .calendar-entry { font-size:11px; padding:5px 6px; border-radius:8px; margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; background:var(--surface); border-left:3px solid var(--danger); }
+    .calendar-entry.receita { border-left-color:var(--success); }
+    .calendar-entry.paga { opacity:.55; text-decoration:line-through; }
+    .drive-panel { background:var(--surface-soft); border:1px solid var(--border); border-radius:16px; padding:16px; }
+    .drive-status { display:inline-flex; align-items:center; gap:7px; padding:7px 10px; border-radius:999px; font-size:12px; font-weight:750; background:var(--surface); }
+    .drive-dot { width:9px; height:9px; border-radius:50%; background:var(--muted); }
+    .drive-status.ok .drive-dot { background:var(--success); }
+    .drive-status.err .drive-dot { background:var(--danger); }
+    .drive-status.sync .drive-dot { background:var(--warning); animation:pulse 1s infinite; }
+    @keyframes pulse { 50% { opacity:.3; } }
+    .drive-buttons { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+    .toggle { width:44px; height:25px; border:0; border-radius:999px; background:var(--border); position:relative; }
+    .toggle::after { content:''; position:absolute; width:19px; height:19px; border-radius:50%; background:white; top:3px; left:3px; transition:.2s; }
+    .toggle.on { background:var(--success); }
+    .toggle.on::after { left:22px; }
+
     @media (max-width: 900px) {
       .grid-4 { grid-template-columns: repeat(2, minmax(0,1fr)); }
       .grid-3 { grid-template-columns: 1fr; }
@@ -294,6 +321,12 @@
       .transaction-actions { grid-column: 2 / -1; justify-content: flex-end; }
       .form-grid { grid-template-columns: 1fr; }
       .chart-wrap { height: 260px; }
+      .calendar-weekdays, .calendar-grid { gap:4px; }
+      .calendar-day { min-height:76px; padding:5px; border-radius:10px; }
+      .calendar-entry { font-size:9px; padding:3px 4px; }
+      .calendar-day-total { display:none; }
+      .drive-buttons { grid-template-columns:1fr; }
+      .nav-btn { font-size:9px; padding-left:2px; padding-right:2px; }
     }
   </style>
 </head>
@@ -450,6 +483,31 @@
       </div>
     </section>
 
+
+    <section id="page-calendar" class="page">
+      <article class="card">
+        <div class="calendar-toolbar">
+          <div><h2 style="margin:0">Calendário financeiro</h2><div class="muted">Vencimentos, receitas e pagamentos de todos os meses</div></div>
+          <div class="calendar-nav">
+            <button class="btn btn-soft btn-small" onclick="changeCalendarMonth(-1)">‹</button>
+            <strong id="calendarTitle"></strong>
+            <button class="btn btn-soft btn-small" onclick="changeCalendarMonth(1)">›</button>
+            <button class="btn btn-small" onclick="goCalendarToday()">Hoje</button>
+          </div>
+        </div>
+        <div class="calendar-weekdays"><div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div></div>
+        <div id="calendarGrid" class="calendar-grid"></div>
+      </article>
+      <article class="card section-spacer">
+        <div class="card-header"><div><h2>Resumo do mês</h2><div class="muted" id="calendarSummaryLabel"></div></div></div>
+        <div class="grid grid-3">
+          <div><div class="metric-label">A pagar</div><div class="metric-value" id="calendarPayable">R$ 0,00</div></div>
+          <div><div class="metric-label">A receber</div><div class="metric-value" id="calendarReceivable">R$ 0,00</div></div>
+          <div><div class="metric-label">Saldo previsto</div><div class="metric-value" id="calendarBalance">R$ 0,00</div></div>
+        </div>
+      </article>
+    </section>
+
     <section id="page-analytics" class="page">
       <div class="grid grid-3">
         <article class="card metric"><div class="metric-label">Receitas no ano</div><div class="metric-value" id="yearIncome">R$ 0,00</div><div class="metric-hint">Total previsto</div></article>
@@ -470,6 +528,20 @@
       <div class="grid grid-2">
         <article class="card">
           <h2>Ajustes</h2>
+          <div class="drive-panel" style="margin-bottom:16px">
+            <div class="card-header" style="margin-bottom:8px"><div><h3 style="margin:0">Google Drive</h3><div class="muted" style="font-size:12px">Backup sincronizado na sua conta</div></div><div id="drive-status-badge" class="drive-status"><span class="drive-dot" id="drive-dot"></span><span id="drive-status-text">Desconectado</span></div></div>
+            <div id="drive-config-aviso" class="muted" style="display:none;color:var(--danger);font-size:12px">Client ID do Google não configurado.</div>
+            <div id="drive-user-info" style="display:none;font-size:13px;font-weight:700;margin:8px 0"></div>
+            <div class="muted" style="font-size:12px">Arquivo: <code>minha_vida_financeira_sync.json</code></div>
+            <div class="drive-buttons">
+              <button id="btn-drive-login" class="btn btn-primary" onclick="driveLogin()">Conectar ao Drive</button>
+              <button id="btn-drive-sync" class="btn btn-primary" onclick="driveSave(true)" style="display:none">Salvar agora</button>
+              <button id="btn-drive-load" class="btn btn-soft" onclick="driveLoad(true)" style="display:none">Carregar da nuvem</button>
+              <button id="btn-drive-logout" class="btn" onclick="driveLogout()" style="display:none">Desconectar</button>
+            </div>
+            <div id="drive-autosync-row" class="setting-row" style="display:none;margin-top:10px"><span>Sincronizar automaticamente</span><button class="toggle" id="toggle-autosync" onclick="toggleDriveAutoSync()"></button></div>
+            <div id="drive-last-sync" class="muted" style="font-size:11px;text-align:center;margin-top:8px"></div>
+          </div>
           <div class="settings-list">
             <div class="setting-row"><span>Modo escuro</span><button class="btn btn-soft btn-small" id="themeSettingBtn">Alternar</button></div>
             <div class="setting-row"><span>Exportar backup JSON</span><button class="btn btn-soft btn-small" onclick="exportData()">Exportar</button></div>
@@ -493,6 +565,7 @@
     <button class="nav-btn active" data-page="dashboard"><span>⌂</span>Visão geral</button>
     <button class="nav-btn" data-page="transactions"><span>≡</span>Lançamentos</button>
     <button class="nav-btn" data-page="planning"><span>◎</span>Planejamento</button>
+    <button class="nav-btn" data-page="calendar"><span>▦</span>Calendário</button>
     <button class="nav-btn" data-page="analytics"><span>◫</span>Análises</button>
     <button class="nav-btn" data-page="more"><span>•••</span>Mais</button>
   </nav>
@@ -574,6 +647,7 @@
     let budgets = {};
     let goals = [];
     let dashboardPeriod = 'month';
+    let calendarDate = new Date();
     let charts = {};
 
     const $ = id => document.getElementById(id);
@@ -601,6 +675,7 @@
       localStorage.setItem('orcamento_budgets', JSON.stringify(budgets));
       localStorage.setItem('orcamento_goals', JSON.stringify(goals));
       renderAll();
+      if (localStorage.getItem('drive_autosync') === 'true' && driveConnected) driveSave(false);
     }
 
     function normalizeAccount(account, originMonth) {
@@ -760,6 +835,44 @@
       </div>`;
     }
 
+
+    function renderCalendar() {
+      const year = calendarDate.getFullYear();
+      const month = calendarDate.getMonth();
+      $('calendarTitle').textContent = `${monthNames[month]} de ${year}`;
+      $('calendarSummaryLabel').textContent = `${monthNames[month]} de ${year}`;
+      const first = new Date(year, month, 1);
+      const gridStart = new Date(year, month, 1 - first.getDay());
+      const txs = allTransactions().filter(t => {
+        const d = localDate(t.dataVencimento) || localDate(`${t.competencia}-01`);
+        return d && d.getFullYear() === year && d.getMonth() === month;
+      });
+      let html = '';
+      const today = startOfToday();
+      for (let i=0; i<42; i++) {
+        const day = new Date(gridStart); day.setDate(gridStart.getDate()+i);
+        const dayIso = iso(day);
+        const entries = allTransactions().filter(t => (t.dataVencimento || `${t.competencia}-01`) === dayIso);
+        const outside = day.getMonth() !== month;
+        const isToday = day.getTime() === today.getTime();
+        const total = sum(entries.filter(t => t.tipo === 'despesa'));
+        html += `<div class="calendar-day ${outside?'outside':''} ${isToday?'today':''}">
+          <div class="calendar-day-number"><span>${day.getDate()}</span><span class="calendar-day-total">${entries.length ? money(total) : ''}</span></div>
+          ${entries.slice(0,3).map(t => `<div class="calendar-entry ${t.tipo} ${t.pago?'paga':''}" title="${escapeHTML(t.desc)} — ${money(t.valor)}">${escapeHTML(t.desc)} · ${money(t.valor)}</div>`).join('')}
+          ${entries.length>3 ? `<div class="calendar-day-total" style="margin-top:4px">+${entries.length-3} lançamento(s)</div>`:''}
+        </div>`;
+      }
+      $('calendarGrid').innerHTML = html;
+      const expenses = txs.filter(t=>t.tipo==='despesa');
+      const income = txs.filter(t=>t.tipo==='receita');
+      $('calendarPayable').textContent = money(sum(expenses.filter(t=>!t.pago)));
+      $('calendarReceivable').textContent = money(sum(income.filter(t=>!t.pago)));
+      $('calendarBalance').textContent = money(sum(income)-sum(expenses));
+    }
+
+    function changeCalendarMonth(delta) { calendarDate.setMonth(calendarDate.getMonth()+delta); renderCalendar(); }
+    function goCalendarToday() { calendarDate = new Date(); renderCalendar(); }
+
     function renderTransactions() {
       let list = allTransactions();
       const q = $('filterSearch').value.trim().toLowerCase();
@@ -864,6 +977,7 @@
       renderBudgets();
       renderGoals();
       if ($('page-analytics').classList.contains('active')) renderAnalytics();
+      if ($('page-calendar').classList.contains('active')) renderCalendar();
     }
 
     function navigate(page) {
@@ -1015,6 +1129,7 @@
       document.body.classList.toggle('dark');
       localStorage.setItem('orcamento_dark', document.body.classList.contains('dark'));
       if ($('page-analytics').classList.contains('active')) renderAnalytics();
+      if ($('page-calendar').classList.contains('active')) renderCalendar();
     }
 
     function exportData() {
@@ -1044,6 +1159,70 @@
       dataByMonth = {}; budgets = {}; goals = []; categories = { ...defaultCategories }; saveData();
     }
 
+
+    const DRIVE_CLIENT_ID = '774507275094-5s3rkartgisgp5v5dasp6lik84n64au2.apps.googleusercontent.com';
+    const DRIVE_FILE_NAME = 'minha_vida_financeira_sync.json';
+    const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
+    let driveTokenClient = null, driveAccessToken = null, driveFileId = null, driveConnected = false, driveInitDone = false;
+
+    function driveSetStatus(text, type='') {
+      const badge=$('drive-status-badge'); if (!badge) return;
+      badge.className='drive-status '+type; $('drive-status-text').textContent=text;
+    }
+    function driveSetButtons(logged) {
+      driveConnected=logged;
+      $('btn-drive-login').style.display=logged?'none':'';
+      $('btn-drive-sync').style.display=logged?'':'none';
+      $('btn-drive-load').style.display=logged?'':'none';
+      $('btn-drive-logout').style.display=logged?'':'none';
+      $('drive-autosync-row').style.display=logged?'flex':'none';
+      $('toggle-autosync').classList.toggle('on', logged && localStorage.getItem('drive_autosync')==='true');
+    }
+    function driveLastSync(ts) { $('drive-last-sync').textContent=ts ? 'Última sincronização: '+new Date(Number(ts)).toLocaleString('pt-BR') : ''; }
+    function driveInit() {
+      if (driveInitDone) return;
+      if (!DRIVE_CLIENT_ID) { $('drive-config-aviso').style.display='block'; return; }
+      if (typeof gapi==='undefined' || typeof google==='undefined' || !google.accounts?.oauth2) { setTimeout(driveInit,700); return; }
+      gapi.load('client', async()=>{
+        try {
+          await gapi.client.init({discoveryDocs:['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']});
+          driveTokenClient=google.accounts.oauth2.initTokenClient({client_id:DRIVE_CLIENT_ID,scope:DRIVE_SCOPES,callback:driveHandleToken});
+          driveInitDone=true;
+          const saved=JSON.parse(localStorage.getItem('drive_token')||'null');
+          if (saved && Date.now()<saved.expiry) {
+            driveAccessToken=saved.token; gapi.client.setToken({access_token:saved.token}); driveSetButtons(true); driveSetStatus('Conectado','ok');
+            const email=localStorage.getItem('drive_email'); if(email){$('drive-user-info').textContent='Conectado como '+email;$('drive-user-info').style.display='block';}
+            driveLastSync(localStorage.getItem('drive_last_sync'));
+          }
+        } catch(e) { console.error(e); driveSetStatus('Erro na API','err'); }
+      });
+    }
+    async function driveHandleToken(resp) {
+      if(resp.error){driveSetStatus('Falha no login','err');return;}
+      driveAccessToken=resp.access_token; gapi.client.setToken({access_token:driveAccessToken});
+      localStorage.setItem('drive_token',JSON.stringify({token:driveAccessToken,expiry:Date.now()+55*60*1000}));
+      try { const me=await gapi.client.request({path:'https://www.googleapis.com/oauth2/v2/userinfo'}); const email=me.result.email; localStorage.setItem('drive_email',email); $('drive-user-info').textContent='Conectado como '+email; $('drive-user-info').style.display='block'; } catch(e) {}
+      driveSetButtons(true); driveSetStatus('Conectado','ok'); driveLastSync(localStorage.getItem('drive_last_sync'));
+    }
+    function driveLogin(){ if(!driveInitDone||!driveTokenClient){driveInit();alert('A integração do Google ainda está carregando. Tente novamente em alguns segundos.');return;} driveTokenClient.requestAccessToken({prompt:'consent'}); }
+    function driveLogout(){ if(driveAccessToken) google.accounts.oauth2.revoke(driveAccessToken); driveAccessToken=null;driveFileId=null;localStorage.removeItem('drive_token');localStorage.removeItem('drive_email');driveSetButtons(false);driveSetStatus('Desconectado');$('drive-user-info').style.display='none'; }
+    async function driveFindFile(){ if(driveFileId)return driveFileId; const res=await gapi.client.drive.files.list({q:`name='${DRIVE_FILE_NAME}' and trashed=false`,fields:'files(id,name)',spaces:'drive'}); driveFileId=res.result.files?.[0]?.id||null; return driveFileId; }
+    function drivePayload(){ return {version:4,updatedAt:new Date().toISOString(),dados:dataByMonth,categorias:categories,budgets,goals}; }
+    async function driveSave(manual=false){
+      if(!driveConnected||!driveAccessToken){if(manual)alert('Conecte ao Google Drive primeiro.');return;}
+      driveSetStatus('Sincronizando…','sync');
+      try { const fid=await driveFindFile(); const boundary='---finance_boundary---'; const meta=JSON.stringify({name:DRIVE_FILE_NAME,mimeType:'application/json'}); const payload=JSON.stringify(drivePayload(),null,2); const body=`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${payload}\r\n--${boundary}--`;
+        const res=await gapi.client.request({path:fid?`https://www.googleapis.com/upload/drive/v3/files/${fid}?uploadType=multipart`:'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',method:fid?'PATCH':'POST',headers:{'Content-Type':`multipart/related; boundary=${boundary}`},body}); if(!fid)driveFileId=res.result.id; const ts=Date.now();localStorage.setItem('drive_last_sync',ts);driveLastSync(ts);driveSetStatus('Sincronizado','ok');if(manual)alert('Dados salvos no Google Drive.');
+      } catch(e){console.error(e);driveSetStatus('Erro ao salvar','err');if(manual)alert('Não foi possível salvar no Drive: '+(e.result?.error?.message||e.message||e));}
+    }
+    async function driveLoad(manual=false){
+      if(!driveConnected||!driveAccessToken){if(manual)alert('Conecte ao Google Drive primeiro.');return;}
+      driveSetStatus('Carregando…','sync');
+      try { const fid=await driveFindFile(); if(!fid){driveSetStatus('Conectado','ok');if(manual)alert('Nenhum backup foi encontrado.');return;} if(manual&&!confirm('Carregar o backup do Google Drive e substituir os dados locais?')){driveSetStatus('Conectado','ok');return;} const res=await gapi.client.drive.files.get({fileId:fid,alt:'media'}); const b=typeof res.result==='string'?JSON.parse(res.result):res.result; dataByMonth=b.dados||{};categories=b.categorias||{...defaultCategories};budgets=b.budgets||{};goals=b.goals||[]; localStorage.setItem('orcamento_dados',JSON.stringify(dataByMonth));localStorage.setItem('orcamento_cats',JSON.stringify(categories));localStorage.setItem('orcamento_budgets',JSON.stringify(budgets));localStorage.setItem('orcamento_goals',JSON.stringify(goals));const ts=Date.now();localStorage.setItem('drive_last_sync',ts);driveLastSync(ts);driveSetStatus('Sincronizado','ok');renderAll();if(manual)alert('Backup carregado com sucesso.');
+      } catch(e){console.error(e);driveSetStatus('Erro ao carregar','err');if(manual)alert('Não foi possível carregar do Drive: '+(e.result?.error?.message||e.message||e));}
+    }
+    function toggleDriveAutoSync(){ const next=localStorage.getItem('drive_autosync')!=='true';localStorage.setItem('drive_autosync',String(next));$('toggle-autosync').classList.toggle('on',next);if(next)driveSave(false); }
+
     function escapeHTML(value='') { return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 
     document.querySelectorAll('.nav-btn').forEach(btn => btn.addEventListener('click', () => navigate(btn.dataset.page)));
@@ -1065,6 +1244,7 @@
     $('todayLabel').textContent = new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
     loadData();
     renderAll();
+    driveInit();
   </script>
 </body>
 </html>
