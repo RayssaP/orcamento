@@ -1345,6 +1345,12 @@
       $('transactionModalTitle').textContent = 'Novo lançamento';
       $('recurringFields').classList.add('hidden');
       $('installmentFields').classList.add('hidden');
+      $('txRecurrenceType').disabled = true;
+      $('txRecurrenceEnd').disabled = true;
+      $('txInstallmentTotal').disabled = true;
+      $('txInstallmentStart').disabled = true;
+      $('txInstallmentTotal').value = 2;
+      $('txInstallmentStart').value = 1;
       $('transactionModal').classList.add('active');
     }
 
@@ -1370,10 +1376,14 @@
       $('txRecurrenceType').value = tx.tipoRecorrencia || 'mensal';
       $('txRecurrenceEnd').value = tx.dataFimRecorrencia || '';
       $('txInstallment').checked = !!tx.parcelada;
-      $('txInstallmentTotal').value = tx.totalParcelas || 2;
-      $('txInstallmentStart').value = tx.parcelaNum || 1;
+      $('txInstallmentTotal').value = tx.parcelada ? Math.max(2, Number(tx.totalParcelas) || 2) : 2;
+      $('txInstallmentStart').value = tx.parcelada ? Math.max(1, Number(tx.parcelaNum) || 1) : 1;
       $('recurringFields').classList.toggle('hidden', !tx.recorrente);
       $('installmentFields').classList.toggle('hidden', !tx.parcelada);
+      $('txRecurrenceType').disabled = !tx.recorrente;
+      $('txRecurrenceEnd').disabled = !tx.recorrente;
+      $('txInstallmentTotal').disabled = !tx.parcelada;
+      $('txInstallmentStart').disabled = !tx.parcelada;
       $('transactionModalTitle').textContent = 'Editar lançamento';
       $('transactionModal').classList.add('active');
     }
@@ -1740,8 +1750,20 @@ Cancelar — não excluir`,
     $('goalForm').addEventListener('submit', saveGoal);
     $('categoryForm').addEventListener('submit', saveCategory);
     $('investmentForm').addEventListener('submit', saveInvestment);
-    $('txRecurring').addEventListener('change', e => $('recurringFields').classList.toggle('hidden', !e.target.checked));
-    $('txInstallment').addEventListener('change', e => $('installmentFields').classList.toggle('hidden', !e.target.checked));
+    $('txRecurring').addEventListener('change', e => {
+      const enabled = e.target.checked;
+      $('recurringFields').classList.toggle('hidden', !enabled);
+      $('txRecurrenceType').disabled = !enabled;
+      $('txRecurrenceEnd').disabled = !enabled;
+    });
+    $('txInstallment').addEventListener('change', e => {
+      const enabled = e.target.checked;
+      $('installmentFields').classList.toggle('hidden', !enabled);
+      $('txInstallmentTotal').disabled = !enabled;
+      $('txInstallmentStart').disabled = !enabled;
+      if (enabled && Number($('txInstallmentTotal').value) < 2) $('txInstallmentTotal').value = 2;
+      if (enabled && Number($('txInstallmentStart').value) < 1) $('txInstallmentStart').value = 1;
+    });
     $('themeBtn').addEventListener('click', toggleTheme);
     $('themeSettingBtn').addEventListener('click', toggleTheme);
     $('exportBtn').addEventListener('click', exportData);
