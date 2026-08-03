@@ -814,7 +814,8 @@
       while (cursor <= maxDate && safety < 1000) {
         if (cursor.getFullYear() >= YEAR - 1 && cursor.getFullYear() <= YEAR + 2) {
           const occurrence = iso(cursor);
-          result.push({
+          const excluded = !!(base.recorrenciaExclusoes && base.recorrenciaExclusoes[occurrence]);
+          if (!excluded) result.push({
             ...base,
             pago: recurrencePaid(base, occurrence),
             dataVencimento: occurrence,
@@ -958,6 +959,7 @@
         <div class="transaction-actions">
           <button class="btn btn-soft btn-small" onclick="togglePaid(${tx._mesOrigem}, '${tx.id}', '${tx._dataOcorrencia || ''}')">${tx.pago ? 'Desfazer' : 'Pagar'}</button>
           <button class="btn btn-small" onclick="editTransaction(${tx._mesOrigem}, '${tx.id}')">Editar</button>
+          <button class="btn btn-danger btn-small" onclick="deleteTransaction(${tx._mesOrigem}, '${tx.id}', '${tx._dataOcorrencia || ''}')">Excluir</button>
         </div>
       </div>`;
     }
@@ -1413,6 +1415,7 @@
           : null,
         dataFimRecorrencia: isRecurring ? $('txRecurrenceEnd').value : null,
         recorrenciaPagamentos: isRecurring ? (existing?.recorrenciaPagamentos || {}) : undefined,
+        recorrenciaExclusoes: isRecurring ? (existing?.recorrenciaExclusoes || {}) : undefined,
         parcelada: $('txInstallment').checked,
         totalParcelas: $('txInstallment').checked ? Number($('txInstallmentTotal').value) : 1,
         parcelaNum: $('txInstallment').checked ? Number($('txInstallmentStart').value) : 1
@@ -1456,6 +1459,92 @@
         account.dataPagamento = account.pago ? iso(new Date()) : '';
       }
       saveData();
+    }
+
+
+    function removeAccountById(month, id) {
+      dataByMonth[month] = (dataByMonth[month] || []).filter(a => String(a.id) !== String(id));
+    }
+
+    function deleteTransaction(month, id, occurrenceDate = '') {
+      const account = (dataByMonth[month] || []).find(a => String(a.id) === String(id));
+      if (!account) {
+        alert('Não foi possível localizar este lançamento.');
+        return;
+      }
+
+      if (account.recorrente) {
+        const option = prompt(
+          `Este lançamento é recorrente. Digite:
+1 — Excluir somente esta ocorrência
+2 — Excluir esta e as próximas
+3 — Excluir toda a série
+Cancelar — não excluir`,
+          occurrenceDate ? '1' : '3'
+        );
+        if (!option) return;
+
+        if (option === '1') {
+          if (!occurrenceDate) {
+            alert('Abra a ocorrência específica que deseja excluir.');
+            return;
+          }
+          account.recorrenciaExclusoes = account.recorrenciaExclusoes || {};
+          account.recorrenciaExclusoes[occurrenceDate] = true;
+          if (account.recorrenciaPagamentos) delete account.recorrenciaPagamentos[occurrenceDate];
+        } else if (option === '2') {
+          if (!occurrenceDate) {
+            alert('Abra a ocorrência a partir da qual deseja encerrar a série.');
+            return;
+          }
+          const end = localDate(occurrenceDate);
+          end.setDate(end.getDate() - 1);
+          account.dataFimRecorrencia = iso(end);
+        } else if (option === '3') {
+          if (!confirm('Excluir definitivamente toda a série recorrente?')) return;
+          removeAccountById(month, id);
+        } else {
+          alert('Opção inválida. Nada foi excluído.');
+          return;
+        }
+        saveData();
+        return;
+      }
+
+      if (account.parcelada && account.grupoId) {
+        const option = prompt(
+          `Este lançamento pertence a uma compra parcelada. Digite:
+1 — Excluir somente esta parcela
+2 — Excluir esta e as parcelas seguintes
+3 — Excluir todas as parcelas da compra
+Cancelar — não excluir`,
+          '1'
+        );
+        if (!option) return;
+        const groupId = String(account.grupoId);
+        const currentNumber = Number(account.parcelaNum || 1);
+
+        Object.keys(dataByMonth).forEach(monthKey => {
+          dataByMonth[monthKey] = (dataByMonth[monthKey] || []).filter(item => {
+            if (String(item.grupoId || '') !== groupId) return true;
+            if (option === '1') return String(item.id) !== String(id);
+            if (option === '2') return Number(item.parcelaNum || 1) < currentNumber;
+            if (option === '3') return false;
+            return true;
+          });
+        });
+        if (!['1','2','3'].includes(option)) {
+          alert('Opção inválida. Nada foi excluído.');
+          return;
+        }
+        saveData();
+        return;
+      }
+
+      if (confirm(`Excluir definitivamente "${account.desc || 'este lançamento'}"?`)) {
+        removeAccountById(month, id);
+        saveData();
+      }
     }
 
     function saveBudgets() {
