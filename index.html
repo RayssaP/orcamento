@@ -348,6 +348,11 @@
     .metric.clickable { cursor: pointer; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
     .metric.clickable:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(15,23,42,.10); border-color: var(--primary); }
     .metric.clickable:focus { outline: 3px solid rgba(37,99,235,.22); outline-offset: 2px; }
+    .investment-card { cursor:pointer; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+    .investment-card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(15,23,42,.10); border-color: var(--primary); }
+    .investment-card .investment-icon { font-size: 24px; margin-bottom: 10px; }
+    .investment-actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+    .investment-total-card { border-color: rgba(21,63,59,.35); background: linear-gradient(135deg, rgba(21,63,59,.06), rgba(255,255,255,.75)); }
     .monthly-status-grid > .clickable-value { cursor: pointer; border-radius: 12px; padding: 10px; margin: -10px; transition: background .18s ease, transform .18s ease; }
     .monthly-status-grid > .clickable-value:hover { background: var(--surface-soft); transform: translateY(-1px); }
     .monthly-status-grid > .clickable-value:focus { outline: 3px solid rgba(37,99,235,.22); outline-offset: 2px; }
@@ -418,28 +423,13 @@
 
       </div>
 
-      <div class="grid grid-4">
-        <article class="card metric">
-          <div class="metric-label">Saldo atual</div>
-          <div class="metric-value" id="metricCurrentBalance">R$ 0,00</div>
-          <div class="metric-hint">Recebido menos efetivamente pago</div>
-        </article>
-        <article class="card metric">
-          <div class="metric-label">Após pendências</div>
-          <div class="metric-value" id="metricAvailable">R$ 0,00</div>
-          <div class="metric-hint">Saldo descontando tudo em aberto</div>
-        </article>
-        <article class="card metric warning clickable" role="button" tabindex="0" onclick="openValueDetails('global-payable')" onkeydown="activateCard(event, 'global-payable')">
-          <div class="metric-label">A pagar</div>
-          <div class="metric-value value-expense" id="metricPayable">R$ 0,00</div>
-          <div class="metric-hint" id="metricPayableHint">0 contas pendentes</div>
-        </article>
-        <article class="card metric clickable" role="button" tabindex="0" onclick="openValueDetails('global-receivable')" onkeydown="activateCard(event, 'global-receivable')">
-          <div class="metric-label">A receber</div>
-          <div class="metric-value" id="metricReceivable">R$ 0,00</div>
-          <div class="metric-hint" id="metricReceivableHint">0 receitas previstas</div>
-        </article>
-      </div>
+      <article class="card investment-total-card">
+        <div class="card-header">
+          <div><h2>Investimentos e cofrinhos</h2><div class="muted">Valores informados manualmente por você</div></div>
+          <button class="btn btn-primary btn-small" onclick="openInvestmentModal()">+ Adicionar</button>
+        </div>
+        <div class="grid grid-4" id="investmentDashboard"></div>
+      </article>
 
       <div class="grid grid-2 section-spacer">
         <article class="card attention-card">
@@ -526,6 +516,14 @@
           <div id="goalList" class="list"></div>
         </article>
       </div>
+      <article class="card section-spacer">
+        <div class="card-header">
+          <div><h2>Investimentos e cofrinhos</h2><div class="muted">Cadastre e atualize os saldos mostrados na tela inicial</div></div>
+          <button class="btn btn-primary btn-small" onclick="openInvestmentModal()">+ Novo</button>
+        </div>
+        <div id="investmentList" class="list"></div>
+      </article>
+
       <article class="card section-spacer">
         <div class="card-header">
           <div><h2>Categorias</h2><div class="muted">Edite nomes e ícones usados em todo o aplicativo</div></div>
@@ -695,6 +693,26 @@
   </div>
 
 
+  <div class="modal" id="investmentModal">
+    <div class="modal-content">
+      <div class="modal-header"><h2 id="investmentModalTitle">Novo investimento ou cofrinho</h2><button class="icon-btn" onclick="closeModal('investmentModal')">✕</button></div>
+      <form id="investmentForm">
+        <input type="hidden" id="investmentId" />
+        <div class="form-grid">
+          <div class="form-group"><label>Ícone</label><input id="investmentIcon" class="field" value="💰" maxlength="8" /></div>
+          <div class="form-group"><label>Tipo</label><select id="investmentType" class="select"><option value="cofrinho">Cofrinho</option><option value="investimento">Investimento</option><option value="reserva">Reserva</option><option value="outro">Outro</option></select></div>
+        </div>
+        <div class="form-group"><label>Nome</label><input id="investmentName" class="field" required placeholder="Ex.: Cofrinho do casamento" /></div>
+        <div class="form-grid">
+          <div class="form-group"><label>Saldo atual</label><input id="investmentBalance" class="field" type="number" step="0.01" min="0" required /></div>
+          <div class="form-group"><label>Instituição (opcional)</label><input id="investmentInstitution" class="field" placeholder="Ex.: Mercado Pago" /></div>
+        </div>
+        <div class="form-group"><label>Observação (opcional)</label><input id="investmentNote" class="field" placeholder="Ex.: 120% do CDI" /></div>
+        <div class="modal-actions"><button type="button" class="btn" onclick="closeModal('investmentModal')">Cancelar</button><button class="btn btn-primary" type="submit">Salvar</button></div>
+      </form>
+    </div>
+  </div>
+
   <div class="modal" id="valueDetailsModal">
     <div class="modal-content">
       <div class="modal-header"><h2 id="valueDetailsTitle">Detalhamento</h2><button class="icon-btn" onclick="closeModal('valueDetailsModal')">✕</button></div>
@@ -721,6 +739,7 @@
     let categories = {};
     let budgets = {};
     let goals = [];
+    let investments = [];
     let dashboardPeriod = 'month';
     let calendarDate = new Date();
     let monthlyViewDate = new Date();
@@ -741,6 +760,7 @@
       categories = JSON.parse(localStorage.getItem('orcamento_cats') || 'null') || { ...defaultCategories };
       budgets = JSON.parse(localStorage.getItem('orcamento_budgets') || '{}');
       goals = JSON.parse(localStorage.getItem('orcamento_goals') || '[]');
+      investments = JSON.parse(localStorage.getItem('orcamento_investments') || '[]');
       const dark = localStorage.getItem('orcamento_dark') === 'true';
       document.body.classList.toggle('dark', dark);
     }
@@ -750,6 +770,7 @@
       localStorage.setItem('orcamento_cats', JSON.stringify(categories));
       localStorage.setItem('orcamento_budgets', JSON.stringify(budgets));
       localStorage.setItem('orcamento_goals', JSON.stringify(goals));
+      localStorage.setItem('orcamento_investments', JSON.stringify(investments));
       renderAll();
       if (localStorage.getItem('drive_autosync') === 'true' && driveConnected) driveSave(false);
     }
@@ -898,13 +919,7 @@
       const pendingIncome = all.filter(t => t.tipo === 'receita' && !t.pago);
       const currentBalance = paidIncome - paidExpense;
       const available = currentBalance - sum(pendingExpense);
-
-      setBalanceValue('metricCurrentBalance', currentBalance);
-      setBalanceValue('metricAvailable', available);
-      $('metricPayable').textContent = '− ' + money(sum(pendingExpense));
-      $('metricPayableHint').textContent = `${pendingExpense.length} conta(s) pendente(s)`;
-      $('metricReceivable').textContent = money(sum(pendingIncome));
-      $('metricReceivableHint').textContent = `${pendingIncome.length} receita(s) prevista(s)`;
+      renderInvestmentDashboard();
 
       const periodTx = all.filter(t => inRange(t, dashboardPeriod));
       const projectedIncome = sum(periodTx.filter(t => t.tipo === 'receita'));
@@ -1196,6 +1211,91 @@
 
     function destroyChart(name) { if (charts[name]) { charts[name].destroy(); delete charts[name]; } }
 
+    function investmentTypeLabel(type) {
+      return ({ cofrinho:'Cofrinho', investimento:'Investimento', reserva:'Reserva', outro:'Outro' })[type] || 'Outro';
+    }
+
+    function investmentCardHTML(item, compact=false) {
+      const note = [item.institution, item.note].filter(Boolean).map(escapeHTML).join(' · ');
+      return `<article class="card metric investment-card" onclick="openInvestmentModal('${item.id}')" role="button" tabindex="0">
+        <div><div class="investment-icon">${escapeHTML(item.icon || '💰')}</div><div class="metric-label">${escapeHTML(item.name)}</div></div>
+        <div class="metric-value">${money(item.balance)}</div>
+        <div class="metric-hint">${escapeHTML(investmentTypeLabel(item.type))}${note ? ' · ' + note : ''}</div>
+      </article>`;
+    }
+
+    function renderInvestmentDashboard() {
+      const el = $('investmentDashboard');
+      if (!el) return;
+      const total = investments.reduce((sum,item) => sum + Number(item.balance || 0), 0);
+      const totalCard = `<article class="card metric investment-card" onclick="navigate('planning')" role="button" tabindex="0">
+        <div><div class="investment-icon">◈</div><div class="metric-label">Total guardado</div></div>
+        <div class="metric-value">${money(total)}</div>
+        <div class="metric-hint">${investments.length} aplicação(ões) cadastrada(s)</div>
+      </article>`;
+      el.innerHTML = totalCard + investments.slice(0,3).map(item => investmentCardHTML(item, true)).join('');
+      if (!investments.length) {
+        el.innerHTML = totalCard + `<article class="card metric investment-card" onclick="openInvestmentModal()"><div><div class="investment-icon">＋</div><div class="metric-label">Adicionar cofrinho</div></div><div class="metric-hint">Cadastre o saldo de uma reserva ou investimento.</div></article>`;
+      }
+    }
+
+    function renderInvestments() {
+      renderInvestmentDashboard();
+      const el = $('investmentList');
+      if (!el) return;
+      el.innerHTML = investments.map(item => `<div class="transaction">
+        <div class="transaction-main"><div class="transaction-title">${escapeHTML(item.icon || '💰')} ${escapeHTML(item.name)}</div><div class="transaction-meta">${escapeHTML(investmentTypeLabel(item.type))}${item.institution ? ' · ' + escapeHTML(item.institution) : ''}${item.note ? ' · ' + escapeHTML(item.note) : ''}</div></div>
+        <div class="transaction-value">${money(item.balance)}</div>
+        <div class="investment-actions"><button class="btn btn-soft btn-small" onclick="openInvestmentModal('${item.id}')">Editar</button><button class="btn btn-small" onclick="deleteInvestment('${item.id}')">Excluir</button></div>
+      </div>`).join('') || '<div class="empty">Nenhum investimento ou cofrinho cadastrado.</div>';
+    }
+
+    function openInvestmentModal(id='') {
+      $('investmentForm').reset();
+      $('investmentId').value = '';
+      $('investmentIcon').value = '💰';
+      $('investmentModalTitle').textContent = 'Novo investimento ou cofrinho';
+      if (id) {
+        const item = investments.find(x => String(x.id) === String(id));
+        if (!item) return;
+        $('investmentId').value = item.id;
+        $('investmentIcon').value = item.icon || '💰';
+        $('investmentType').value = item.type || 'cofrinho';
+        $('investmentName').value = item.name || '';
+        $('investmentBalance').value = Number(item.balance || 0);
+        $('investmentInstitution').value = item.institution || '';
+        $('investmentNote').value = item.note || '';
+        $('investmentModalTitle').textContent = 'Editar investimento ou cofrinho';
+      }
+      $('investmentModal').classList.add('active');
+    }
+
+    function saveInvestment(event) {
+      event.preventDefault();
+      const id = $('investmentId').value;
+      const item = {
+        id: id || String(Date.now()),
+        icon: $('investmentIcon').value.trim() || '💰',
+        type: $('investmentType').value,
+        name: $('investmentName').value.trim(),
+        balance: Number($('investmentBalance').value || 0),
+        institution: $('investmentInstitution').value.trim(),
+        note: $('investmentNote').value.trim(),
+        updatedAt: new Date().toISOString()
+      };
+      if (!item.name) return;
+      const index = investments.findIndex(x => String(x.id) === String(id));
+      if (index >= 0) investments[index] = item; else investments.push(item);
+      closeModal('investmentModal');
+      saveData();
+    }
+
+    function deleteInvestment(id) {
+      if (!confirm('Excluir este investimento ou cofrinho?')) return;
+      investments = investments.filter(x => String(x.id) !== String(id));
+      saveData();
+    }
+
     function renderCategoryOptions() {
       const options = Object.entries(categories).map(([key,cat]) => `<option value="${key}">${cat.icone} ${escapeHTML(cat.nome)}</option>`).join('');
       $('txCategory').innerHTML = options;
@@ -1208,6 +1308,7 @@
       renderTransactions();
       renderBudgets();
       renderGoals();
+      renderInvestments();
       renderCategories();
       if ($('page-analytics').classList.contains('active')) renderAnalytics();
       if ($('page-calendar').classList.contains('active')) renderCalendar();
@@ -1390,7 +1491,7 @@
     }
 
     function exportData() {
-      const payload = { version:3, exportedAt:new Date().toISOString(), dados:dataByMonth, categorias:categories, budgets, goals };
+      const payload = { version:5, exportedAt:new Date().toISOString(), dados:dataByMonth, categorias:categories, budgets, goals, investments };
       const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
       const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='minha-vida-financeira-backup.json'; a.click(); URL.revokeObjectURL(url);
     }
@@ -1404,6 +1505,7 @@
           categories = payload.categorias || payload.categories || { ...defaultCategories };
           budgets = payload.budgets || {};
           goals = payload.goals || [];
+          investments = payload.investments || [];
           saveData();
           alert('Dados importados com sucesso.');
         } catch { alert('Arquivo inválido.'); }
@@ -1413,7 +1515,7 @@
 
     function clearAllData() {
       if (!confirm('Isso apagará todos os lançamentos, metas e limites. Continuar?')) return;
-      dataByMonth = {}; budgets = {}; goals = []; categories = { ...defaultCategories }; saveData();
+      dataByMonth = {}; budgets = {}; goals = []; investments = []; categories = { ...defaultCategories }; saveData();
     }
 
 
@@ -1493,7 +1595,7 @@
     function driveLogin(){ if(!driveInitDone||!driveTokenClient){driveInit();alert('A integração do Google ainda está carregando. Tente novamente em alguns segundos.');return;} driveTokenClient.requestAccessToken({prompt:localStorage.getItem('drive_email')?'':'consent'}); }
     function driveLogout(){ if(driveAccessToken) google.accounts.oauth2.revoke(driveAccessToken); driveAccessToken=null;driveFileId=null; if(driveAutoSyncTimer){clearInterval(driveAutoSyncTimer);driveAutoSyncTimer=null;} localStorage.removeItem('drive_token');localStorage.removeItem('drive_email');driveSilentLoginAttempted=false;driveSetButtons(false);driveSetStatus('Desconectado');$('drive-user-info').style.display='none'; }
     async function driveFindFile(){ if(driveFileId)return driveFileId; const res=await gapi.client.drive.files.list({q:`name='${DRIVE_FILE_NAME}' and trashed=false`,fields:'files(id,name)',spaces:'drive'}); driveFileId=res.result.files?.[0]?.id||null; return driveFileId; }
-    function drivePayload(){ return {version:4,updatedAt:new Date().toISOString(),dados:dataByMonth,categorias:categories,budgets,goals}; }
+    function drivePayload(){ return {version:5,updatedAt:new Date().toISOString(),dados:dataByMonth,categorias:categories,budgets,goals,investments}; }
     function driveTokenIsValid() {
       const saved=JSON.parse(localStorage.getItem('drive_token')||'null');
       return !!(driveAccessToken && saved && Date.now() < Number(saved.expiry || 0));
@@ -1526,7 +1628,7 @@
     async function driveLoad(manual=false){
       if(!driveConnected||!driveAccessToken){if(manual)alert('Conecte ao Google Drive primeiro.');return;}
       driveSetStatus('Carregando…','sync');
-      try { const fid=await driveFindFile(); if(!fid){driveSetStatus('Conectado','ok');if(manual)alert('Nenhum backup foi encontrado.');return;} if(manual&&!confirm('Carregar o backup do Google Drive e substituir os dados locais?')){driveSetStatus('Conectado','ok');return;} const res=await gapi.client.drive.files.get({fileId:fid,alt:'media'}); const b=typeof res.result==='string'?JSON.parse(res.result):res.result; dataByMonth=b.dados||{};categories=b.categorias||{...defaultCategories};budgets=b.budgets||{};goals=b.goals||[]; localStorage.setItem('orcamento_dados',JSON.stringify(dataByMonth));localStorage.setItem('orcamento_cats',JSON.stringify(categories));localStorage.setItem('orcamento_budgets',JSON.stringify(budgets));localStorage.setItem('orcamento_goals',JSON.stringify(goals));const ts=Date.now();localStorage.setItem('drive_last_sync',ts);driveLastSync(ts);driveSetStatus('Sincronizado','ok');renderAll();if(manual)alert('Backup carregado com sucesso.');
+      try { const fid=await driveFindFile(); if(!fid){driveSetStatus('Conectado','ok');if(manual)alert('Nenhum backup foi encontrado.');return;} if(manual&&!confirm('Carregar o backup do Google Drive e substituir os dados locais?')){driveSetStatus('Conectado','ok');return;} const res=await gapi.client.drive.files.get({fileId:fid,alt:'media'}); const b=typeof res.result==='string'?JSON.parse(res.result):res.result; dataByMonth=b.dados||{};categories=b.categorias||{...defaultCategories};budgets=b.budgets||{};goals=b.goals||[];investments=b.investments||[]; localStorage.setItem('orcamento_dados',JSON.stringify(dataByMonth));localStorage.setItem('orcamento_cats',JSON.stringify(categories));localStorage.setItem('orcamento_budgets',JSON.stringify(budgets));localStorage.setItem('orcamento_goals',JSON.stringify(goals));localStorage.setItem('orcamento_investments',JSON.stringify(investments));const ts=Date.now();localStorage.setItem('drive_last_sync',ts);driveLastSync(ts);driveSetStatus('Sincronizado','ok');renderAll();if(manual)alert('Backup carregado com sucesso.');
       } catch(e){console.error(e);driveSetStatus('Erro ao carregar','err');if(manual)alert('Não foi possível carregar do Drive: '+(e.result?.error?.message||e.message||e));}
     }
     function toggleDriveAutoSync(){ const next=localStorage.getItem('drive_autosync')!=='true';localStorage.setItem('drive_autosync',String(next));$('toggle-autosync').classList.toggle('on',next);updateDriveAutoSyncTimer();if(next)driveSave(false); }
@@ -1542,6 +1644,7 @@
     $('transactionForm').addEventListener('submit', saveTransaction);
     $('goalForm').addEventListener('submit', saveGoal);
     $('categoryForm').addEventListener('submit', saveCategory);
+    $('investmentForm').addEventListener('submit', saveInvestment);
     $('txRecurring').addEventListener('change', e => $('recurringFields').classList.toggle('hidden', !e.target.checked));
     $('txInstallment').addEventListener('change', e => $('installmentFields').classList.toggle('hidden', !e.target.checked));
     $('themeBtn').addEventListener('click', toggleTheme);
