@@ -1349,6 +1349,9 @@
     }
 
     function editTransaction(month, id) {
+      // Evita duas janelas sobrepostas quando a edição é iniciada pelo
+      // detalhamento de um card da tela inicial.
+      closeModal('valueDetailsModal');
       const account = (dataByMonth[month] || []).find(a => String(a.id) === String(id));
       if (!account) return;
       const tx = normalizeAccount(account, month);
@@ -1444,7 +1447,10 @@
       } else {
         dataByMonth[month].push(base);
       }
+      // Fecha qualquer janela de detalhamento que tenha originado a edição,
+      // salva primeiro no armazenamento e só então redesenha todas as telas.
       closeModal('transactionModal');
+      closeModal('valueDetailsModal');
       saveData();
     }
 
